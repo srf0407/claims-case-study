@@ -1,0 +1,66 @@
+# Backlog
+
+Tick items off as they're done. Titles only; details are clarified per ticket with `implement-ticket`.
+Draft order; reorder or cut freely.
+
+## 0. AI workspace setup
+- [x] Research AI context files and skills for the workflow
+- [x] Write AGENTS.md (golden rule, layer map, conventions)
+- [x] Set up project skills (implement-ticket, test-strategy, architecture-decision-record, mermaid-diagrams, review-changes)
+- [x] Create this backlog
+
+## 1. Understand and decide
+
+- [ ] Confirm scope and assumptions from the case study
+- [ ] Context diagram of all systems
+- [ ] ADR: single service with outbound ports
+- [ ] ADR: sync vs async integration (payment callback)
+- [ ] ADR: death-claim prioritisation approach
+- [ ] Claim status lifecycle (state diagram)
+
+## 2. Project setup
+
+- [ ] Spring Boot + Maven build and wrapper
+- [ ] ArchUnit architecture test
+- [ ] WireMock test setup
+
+## 3. Domain and use cases
+
+- [ ] Claim domain model (types, statuses, transition rules)
+- [ ] Submit claim use case
+- [ ] Validate client use case
+- [ ] Assess policy and benefits use case
+- [ ] Initiate payment use case
+- [ ] Apply payment status use case
+- [ ] Death-claim priority handling
+
+
+
+## 4. Adapters
+
+- [ ] Claim intake endpoint (`POST /claims`)
+- [ ] Claim status endpoint (`GET /claims/{id}`)
+- [ ] Payment status callback endpoint
+- [ ] Client Registry client + WireMock tests
+- [ ] Policy Manager client + WireMock tests
+- [ ] Payment client + WireMock tests
+- [ ] In-memory claim repository
+- [ ] Error handling and validation responses
+
+
+
+## 5. Documentation
+
+- [ ] Solution description
+- [ ] Assumptions
+- [ ] Recommended changes to existing systems
+- [ ] System interactions (sequence diagrams)
+- [ ] AI usage write-up
+- [ ] README: how to run and test
+
+
+
+## 6. Optional
+
+- [ ] LocalStack integration (SQS / DynamoDB)
+- [ ] Final check against the brief
