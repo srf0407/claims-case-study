@@ -1,0 +1,23 @@
+# Secrets
+.env
+.env.*
+*.pem
+*.key
+
+# IDE
+.vs/
+.idea/
+.vscode/
+*.user
+*.suo
+
+# Build output
+bin/
+obj/
+target/
+out/
+dist/
+node_modules/
+
+# Logs
+*.log
