@@ -15,7 +15,7 @@
 bin/
 obj/
 target/
-out/
+/out/
 dist/
 node_modules/
 
