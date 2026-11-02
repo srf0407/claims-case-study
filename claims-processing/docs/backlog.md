@@ -12,7 +12,7 @@ Draft order; reorder or cut freely.
 ## 1. Understand and decide
 
 - [x] Confirm scope and assumptions from the case study
-- [ ] Context diagram of all systems
+- [x] Context diagram of all systems
 - [ ] ADR: single service with outbound ports
 - [ ] ADR: sync vs async integration (payment callback)
 - [ ] ADR: death-claim prioritisation approach

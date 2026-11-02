@@ -44,6 +44,8 @@ A high amount, or a flag, sends the claim to an analyst queue.
 
 A death claim always goes to a priority analyst queue, with an SLA alarm.
 
+A queued claim is approved or rejected in the Claims System UI. The UI calls claims-service, and on approval claims-service initiates payment.
+
 Business rejection (unknown client, lapsed policy, no cover) is not retried. The claim is rejected, or sent to an analyst when the case is borderline.
 
 A temporary failure (the system is down, the call times out, or the response is 503) is retried with backoff. After retries are exhausted the message goes to a dead-letter queue and the claim is flagged for an analyst.
@@ -89,3 +91,4 @@ Leave these unset. Do not invent values for them in code or in this file.
 | What counts as borderline (analyst versus reject) | Not assigned to a ticket yet |
 | Retry count and backoff | Not assigned to a ticket yet |
 | Whether the analyst queue is a separate port from the SQS queues | Not assigned to a ticket yet |
+| Analyst decision endpoint (approve or reject a queued claim, for example `POST /claims/{id}/decision`) | Not assigned to a ticket yet |
