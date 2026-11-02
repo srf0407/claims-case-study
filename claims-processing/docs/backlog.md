@@ -21,7 +21,7 @@ Draft order; reorder or cut freely.
 ## 2. Project setup
 
 - [x] Spring Boot + Maven build and wrapper
-- [ ] ArchUnit architecture test
+- [x] ArchUnit architecture test
 - [ ] WireMock test setup
 - [ ] Dockerfile + docker-compose
 
@@ -34,6 +34,7 @@ Draft order; reorder or cut freely.
 - [ ] Initiate payment use case
 - [ ] Apply payment status use case
 - [ ] Death-claim priority handling
+- [ ] Remove ArchUnit empty-layer allowances (withOptionalLayers, failOnEmptyShould) once each layer has classes
 
 
 
