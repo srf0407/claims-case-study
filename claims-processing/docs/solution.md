@@ -42,7 +42,7 @@ Death claims never use straight-through processing. For every other claim, when 
 
 A high amount, or a flag, sends the claim to an analyst queue.
 
-A death claim always goes to a priority analyst queue, with an SLA alarm.
+A death claim uses a priority queue for its client and policy checks, its analyst handoff, and its payment-status update. The worker drains that queue before the normal queue. The SLA is 4 clock hours from accept (`POST /claims`) until the analyst decision, or until the claim is rejected with no analyst decision. The duration is an assumption pending business confirmation and is a config value (default 4 hours). A warning alarm fires at 75% of the duration (3 hours at the default). A death-claim message that exhausts its retries goes to the dead-letter queue and is flagged to the priority analyst queue, and the SLA clock keeps running. Recorded in ADR-0003.
 
 A queued claim is approved or rejected in the Claims System UI. The UI calls claims-service, and on approval claims-service initiates payment.
 
@@ -87,7 +87,6 @@ Leave these unset. Do not invent values for them in code or in this file.
 
 | Item | Where it is set |
 |---|---|
-| Numeric death-claim SLA | Death-claim prioritisation ADR |
 | Straight-through amount limit | Not assigned to a ticket yet |
 | What counts as a flag | Not assigned to a ticket yet |
 | What counts as borderline (analyst versus reject) | Not assigned to a ticket yet |
