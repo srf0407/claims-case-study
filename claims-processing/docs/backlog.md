@@ -24,7 +24,7 @@ Draft order; reorder or cut freely.
 - [x] ArchUnit architecture test
 - [x] WireMock test setup
 - [x] CI: verify on PRs and main
-- [ ] Dockerfile + docker-compose
+- [x] Dockerfile + docker-compose
 
 ## 3. Domain and use cases
 
