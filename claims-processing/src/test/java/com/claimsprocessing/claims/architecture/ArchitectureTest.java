@@ -46,7 +46,8 @@ class ArchitectureTest {
             .should().dependOnClassesThat().resideInAnyPackage(
                     "org.springframework..",
                     "jakarta..",
-                    "com.fasterxml.jackson..");
+                    "com.fasterxml.jackson..",
+                    "tools.jackson..");
 
     @ArchTest
     static final ArchRule application_is_free_of_spring = noClasses()
