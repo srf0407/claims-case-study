@@ -92,3 +92,4 @@ Leave these unset. Do not invent values for them in code or in this file.
 | What counts as borderline (analyst versus reject) | Not assigned to a ticket yet |
 | Whether the analyst queue is a separate port from the SQS queues | Not assigned to a ticket yet |
 | Analyst decision endpoint (approve or reject a queued claim, for example `POST /claims/{id}/decision`) | Not assigned to a ticket yet |
+| What happens after PAYMENT_FAILED (retry payment, analyst review, or terminal) | Not assigned to a ticket yet |
