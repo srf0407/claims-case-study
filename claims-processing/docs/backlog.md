@@ -11,7 +11,7 @@ Draft order; reorder or cut freely.
 
 ## 1. Understand and decide
 
-- [ ] Confirm scope and assumptions from the case study
+- [x] Confirm scope and assumptions from the case study
 - [ ] Context diagram of all systems
 - [ ] ADR: single service with outbound ports
 - [ ] ADR: sync vs async integration (payment callback)
@@ -23,6 +23,7 @@ Draft order; reorder or cut freely.
 - [ ] Spring Boot + Maven build and wrapper
 - [ ] ArchUnit architecture test
 - [ ] WireMock test setup
+- [ ] Dockerfile + docker-compose
 
 ## 3. Domain and use cases
 
