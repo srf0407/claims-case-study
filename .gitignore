@@ -21,3 +21,6 @@ node_modules/
 
 # Logs
 *.log
+
+# Case study brief (local only)
+/Developer Case Study 1.pdf

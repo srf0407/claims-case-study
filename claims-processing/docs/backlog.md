@@ -20,7 +20,7 @@ Draft order; reorder or cut freely.
 
 ## 2. Project setup
 
-- [ ] Spring Boot + Maven build and wrapper
+- [x] Spring Boot + Maven build and wrapper
 - [ ] ArchUnit architecture test
 - [ ] WireMock test setup
 - [ ] Dockerfile + docker-compose
