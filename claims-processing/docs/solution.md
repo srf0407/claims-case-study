@@ -48,9 +48,11 @@ A queued claim is approved or rejected in the Claims System UI. The UI calls cla
 
 Business rejection (unknown client, lapsed policy, no cover) is not retried. The claim is rejected, or sent to an analyst when the case is borderline.
 
-A temporary failure (the system is down, the call times out, or the response is 503) is retried with backoff. After retries are exhausted the message goes to a dead-letter queue and the claim is flagged for an analyst.
+A temporary failure (the system is down, the call times out, or the response is 503) gets 4 receives: the first attempt plus 3 retries, with backoff 1s, 2s, 4s. On SQS, `maxReceiveCount` is 4. After retries are exhausted the message goes to a dead-letter queue and the claim is flagged for an analyst.
 
-A payment request carries an idempotency key. The Payment System reports status later by calling a payment-status endpoint on this API. That callback is asynchronous. The sync-versus-async ADR records the detail.
+A payment request carries an idempotency key. The Payment System reports status later by a signed HTTPS webhook to the payment-status endpoint (API Gateway in the AWS mapping). The endpoint queues the status and returns 200 once the message is queued. A worker then updates the claim. Payment retries the webhook if this service is down. Payment echoes the idempotency key, and a repeat delivery with the same key does not change the claim again. Recorded in ADR-0002.
+
+Client Registry and Policy Manager calls are synchronous HTTP from a queue worker. A temporary failure retries that message, as described above.
 
 ### Boundaries the later tickets implement
 
@@ -65,16 +67,17 @@ Queues and storage are behind ports. Sample code keeps them in memory.
 
 - The Claims System UI and any other frontend
 - Channels other than the web form
-- Authentication
+- Authentication of claimants, analysts, and the channel
 - Partial payments
 - AWS calls and LocalStack, unless the optional LocalStack backlog item is started
 
 ## Assumptions
 
 - Queues and claim storage sit behind ports. Implementations in this sample are in memory.
-- The design maps the running system to AWS: API Gateway, ECS Fargate, SQS (a normal queue, a death-claim priority queue, and a dead-letter queue), DynamoDB, CloudWatch SLA alarms, and Secrets Manager. EventBridge versus SNS for payment status is still open.
+- The design maps the running system to AWS: API Gateway, ECS Fargate, SQS (a normal queue, a death-claim priority queue, and a dead-letter queue), DynamoDB, CloudWatch SLA alarms, and Secrets Manager. Payment status uses neither EventBridge nor SNS.
+- The Payment System is assumed external, based on its 'Third Party' label in the case-study context diagram. It therefore reports status through an HTTPS webhook, not our internal event bus. The brief does not confirm this.
 - LocalStack SQS is an optional profile, added only if that backlog item is picked up.
-- Authentication is out of scope for the sample.
+- Authentication of claimants, analysts, and the channel is out of scope for the sample. The payment webhook signature is in scope and is recorded in ADR-0002.
 - Partial payments are out of scope for the sample.
 - External systems are reached only through outbound ports and mocked with WireMock in tests.
 
@@ -85,10 +88,8 @@ Leave these unset. Do not invent values for them in code or in this file.
 | Item | Where it is set |
 |---|---|
 | Numeric death-claim SLA | Death-claim prioritisation ADR |
-| Payment callback mechanism, including EventBridge versus SNS | Sync vs async integration ADR |
 | Straight-through amount limit | Not assigned to a ticket yet |
 | What counts as a flag | Not assigned to a ticket yet |
 | What counts as borderline (analyst versus reject) | Not assigned to a ticket yet |
-| Retry count and backoff | Not assigned to a ticket yet |
 | Whether the analyst queue is a separate port from the SQS queues | Not assigned to a ticket yet |
 | Analyst decision endpoint (approve or reject a queued claim, for example `POST /claims/{id}/decision`) | Not assigned to a ticket yet |

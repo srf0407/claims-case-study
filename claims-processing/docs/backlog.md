@@ -14,7 +14,7 @@ Draft order; reorder or cut freely.
 - [x] Confirm scope and assumptions from the case study
 - [x] Context diagram of all systems
 - [x] ADR: single service with outbound ports
-- [ ] ADR: sync vs async integration (payment callback)
+- [x] ADR: sync vs async integration (payment callback)
 - [ ] ADR: death-claim prioritisation approach
 - [ ] Claim status lifecycle (state diagram)
 
