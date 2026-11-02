@@ -76,6 +76,11 @@ Tests mirror the main package layout; architecture tests are in `src/test/java/c
    └─ review-changes                every finished slice          (report only, never edits)
         └─ suggests → architecture-decision-record / mermaid-diagrams / test-strategy
    ```
+   ```
+   plan-ticket (docs-only tickets: decisions STOP → draft + consistency check STOP → write STOP)
+   ├─ architecture-decision-record
+   └─ mermaid-diagrams
+   ```
    Each skill can also be used directly. Sub-skills hand control back to their caller.
 4. Log meaningful AI-assisted work with `scripts/log-ai.ps1` (what was asked, outcome, what changed).
 5. Keep changes small and focused, one concern per change. Don't touch unrelated files.

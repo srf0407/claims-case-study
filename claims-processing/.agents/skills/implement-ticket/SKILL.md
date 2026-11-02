@@ -13,6 +13,7 @@ Every **STOP** means: end your turn and wait for the developer's reply. Never co
 - free text or a pasted ticket.
 
 If the title matches no backlog item, or matches several, ask which one. Never pick one silently.
+If the ticket only produces files in `docs/` (scope, ADR, diagram, write-up), use the `plan-ticket` skill instead and stop here.
 
 ## 1. Load context
 Read the ticket, `AGENTS.md`, `docs/solution.md`, and whichever `docs/adr/*` and `docs/diagrams/*`
