@@ -22,7 +22,8 @@ Draft order; reorder or cut freely.
 
 - [x] Spring Boot + Maven build and wrapper
 - [x] ArchUnit architecture test
-- [ ] WireMock test setup
+- [x] WireMock test setup
+- [x] CI: verify on PRs and main
 - [ ] Dockerfile + docker-compose
 
 ## 3. Domain and use cases
