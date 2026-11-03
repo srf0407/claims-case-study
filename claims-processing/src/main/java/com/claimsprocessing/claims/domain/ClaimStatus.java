@@ -18,8 +18,8 @@ public enum ClaimStatus {
 
     private Set<ClaimStatus> allowedTargets() {
         return switch (this) {
-            case ACCEPTED -> EnumSet.of(REJECTED, AWAITING_ANALYST, PAYMENT_PENDING);
-            case AWAITING_ANALYST -> EnumSet.of(REJECTED, APPROVED);
+            case ACCEPTED -> EnumSet.of(AWAITING_ANALYST, PAYMENT_PENDING);
+            case AWAITING_ANALYST -> EnumSet.of(APPROVED);
             case APPROVED -> EnumSet.of(PAYMENT_PENDING);
             case PAYMENT_PENDING -> EnumSet.of(PAID, PAYMENT_FAILED);
             case REJECTED, PAID, PAYMENT_FAILED -> EnumSet.noneOf(ClaimStatus.class);
