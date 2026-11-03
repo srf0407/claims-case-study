@@ -106,6 +106,11 @@ public final class Claim {
         return copyWith(ClaimStatus.REJECTED, Optional.of(reason), List.copyOf(updatedEvents));
     }
 
+    public boolean isEligibleForStraightThrough(BigDecimal limit, boolean flagged) {
+        Objects.requireNonNull(limit, "limit");
+        return claimType != ClaimType.DEATH && !flagged && amount.compareTo(limit) < 0;
+    }
+
     private Claim copyWith(ClaimStatus status, Optional<RejectionReason> rejectionReason, List<ClaimEvent> events) {
         return new Claim(
                 id,

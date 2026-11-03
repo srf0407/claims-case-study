@@ -42,6 +42,8 @@ Input that fails validation gets HTTP 400 and is never queued.
 
 Death claims never use straight-through processing. For every other claim, when the client check and the policy check both pass, and the amount is under a set limit, payment starts automatically.
 
+The straight-through limit is a `BigDecimal` constructor argument on the straight-through use case. Payment starts only when the amount is strictly under that limit. The illustrative default is 10000.00.
+
 A high amount, or a flag, sends the claim to an analyst queue.
 
 A death claim uses a priority queue for its client and policy checks, its analyst handoff, and its payment-status update. The worker drains that queue before the normal queue. The SLA is 4 clock hours from accept (`POST /claims`) until the analyst decision, or until the claim is rejected with no analyst decision. The duration is an assumption pending business confirmation and is a config value (default 4 hours). A warning alarm fires at 75% of the duration (3 hours at the default). A death-claim message that exhausts its retries goes to the dead-letter queue and is flagged to the priority analyst queue, and the SLA clock keeps running. Recorded in ADR-0003.
@@ -90,8 +92,8 @@ Leave these unset. Do not invent values for them in code or in this file.
 
 | Item | Where it is set |
 |---|---|
-| Straight-through amount limit | Not assigned to a ticket yet |
-| What counts as a flag | Not assigned to a ticket yet |
+| Straight-through amount limit | Constructor argument on the straight-through use case. Strictly under the limit. Illustrative default 10000.00. |
+| What counts as a flag | A boolean `flagged` on the straight-through command. Who sets it remains open. |
 | What counts as borderline (analyst versus reject) | Not assigned to a ticket yet |
 | Whether the analyst queue is a separate port from the SQS queues | Not assigned to a ticket yet |
 | Analyst decision endpoint (approve or reject a queued claim, for example `POST /claims/{id}/decision`) | Not assigned to a ticket yet |
