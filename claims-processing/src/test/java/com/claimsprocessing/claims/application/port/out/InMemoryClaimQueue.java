@@ -3,10 +3,14 @@ package com.claimsprocessing.claims.application.port.out;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
+
+import com.claimsprocessing.claims.domain.ClaimType;
 
 public final class InMemoryClaimQueue implements ClaimQueuePort {
 
-    private final List<ClaimQueuedMessage> messages = new ArrayList<>();
+    private final List<ClaimQueuedMessage> deathMessages = new ArrayList<>();
+    private final List<ClaimQueuedMessage> normalMessages = new ArrayList<>();
     private ClaimQueueUnavailableException failure;
     private int failuresLeft;
 
@@ -21,7 +25,10 @@ public final class InMemoryClaimQueue implements ClaimQueuePort {
     }
 
     public List<ClaimQueuedMessage> messages() {
-        return List.copyOf(messages);
+        var waiting = new ArrayList<ClaimQueuedMessage>(deathMessages.size() + normalMessages.size());
+        waiting.addAll(deathMessages);
+        waiting.addAll(normalMessages);
+        return List.copyOf(waiting);
     }
 
     @Override
@@ -31,6 +38,21 @@ public final class InMemoryClaimQueue implements ClaimQueuePort {
             failuresLeft--;
             throw failure;
         }
-        messages.add(message);
+        if (message.claimType() == ClaimType.DEATH) {
+            deathMessages.add(message);
+        } else {
+            normalMessages.add(message);
+        }
+    }
+
+    @Override
+    public Optional<ClaimQueuedMessage> receive() {
+        if (!deathMessages.isEmpty()) {
+            return Optional.of(deathMessages.removeFirst());
+        }
+        if (!normalMessages.isEmpty()) {
+            return Optional.of(normalMessages.removeFirst());
+        }
+        return Optional.empty();
     }
 }

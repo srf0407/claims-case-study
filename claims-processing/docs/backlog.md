@@ -36,7 +36,9 @@ Draft order; reorder or cut freely.
 - [ ] Straight-through payment for eligible accepted claims (needs limit and flag decided)
 - [x] Apply payment status use case
 - [x] Enqueue accepted claims for the worker (queue port, in-memory fake)
-- [ ] Death-claim priority handling
+- [x] Death-claim priority handling
+- [ ] Claim worker use case (receive, run client and policy checks, route)
+- [ ] Death-claim SLA warning and breach alarms (config, monitoring)
 - [ ] Remove ArchUnit empty-layer allowances (withOptionalLayers, failOnEmptyShould) once each layer has classes
 
 
