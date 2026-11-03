@@ -88,7 +88,7 @@ Queues and storage are behind ports. Sample code keeps them in memory.
 
 ## Open — set in a later ADR
 
-Leave these unset. Do not invent values for them in code or in this file.
+Rows without a decided "where it is set" cell are still open. Do not invent values for them in code or in this file.
 
 | Item | Where it is set |
 |---|---|
