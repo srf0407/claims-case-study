@@ -31,7 +31,7 @@ Draft order; reorder or cut freely.
 - [x] Claim domain model (types, statuses, transition rules)
 - [x] Submit claim use case
 - [x] Validate client use case
-- [ ] Assess policy and benefits use case
+- [x] Assess policy and benefits use case
 - [ ] Initiate payment use case
 - [ ] Apply payment status use case
 - [ ] Enqueue accepted claims for the worker (queue port, in-memory fake)
