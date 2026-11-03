@@ -98,3 +98,4 @@ Leave these unset. Do not invent values for them in code or in this file.
 | What happens after PAYMENT_FAILED (retry payment, analyst review, or terminal) | Not assigned to a ticket yet |
 | Currency and scale of amount | Not decided |
 | Full event sourcing for the claim | Not assigned to a ticket yet |
+| Where payee bank details are held (claim or payment request) | Not assigned to a ticket yet |

@@ -6,6 +6,7 @@ import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.UUID;
 
 public final class Claim {
@@ -19,6 +20,7 @@ public final class Claim {
     private final LocalDate dateOfDeath;
     private final String deathCertificateRef;
     private final ClaimStatus status;
+    private final Optional<RejectionReason> rejectionReason;
     private final List<ClaimEvent> events;
 
     private Claim(
@@ -31,7 +33,15 @@ public final class Claim {
             LocalDate dateOfDeath,
             String deathCertificateRef,
             ClaimStatus status,
+            Optional<RejectionReason> rejectionReason,
             List<ClaimEvent> events) {
+        Objects.requireNonNull(rejectionReason, "rejectionReason");
+        if (status == ClaimStatus.REJECTED && rejectionReason.isEmpty()) {
+            throw new InvalidClaimException("rejection reason is required");
+        }
+        if (status != ClaimStatus.REJECTED && rejectionReason.isPresent()) {
+            throw new InvalidClaimException("rejection reason is only allowed when rejected");
+        }
         this.id = id;
         this.clientId = clientId;
         this.policyNumber = policyNumber;
@@ -41,6 +51,7 @@ public final class Claim {
         this.dateOfDeath = dateOfDeath;
         this.deathCertificateRef = deathCertificateRef;
         this.status = status;
+        this.rejectionReason = rejectionReason;
         this.events = events;
     }
 
@@ -65,6 +76,7 @@ public final class Claim {
                 dateOfDeath,
                 deathCertificateRef,
                 ClaimStatus.ACCEPTED,
+                Optional.empty(),
                 List.copyOf(List.of(new ClaimAccepted(clock.instant()))));
     }
 
@@ -75,7 +87,26 @@ public final class Claim {
             throw new IllegalClaimTransitionException(status, next);
         }
         var updatedEvents = new ArrayList<ClaimEvent>(events);
-        updatedEvents.add(new ClaimStatusChanged(status, next, clock.instant()));
+        updatedEvents.add(new ClaimStatusChanged(status, next, Optional.empty(), clock.instant()));
+        return copyWith(next, rejectionReason, List.copyOf(updatedEvents));
+    }
+
+    public Claim reject(RejectionReason reason, Clock clock) {
+        Objects.requireNonNull(clock, "clock");
+        Objects.requireNonNull(reason, "reason");
+        if (!canRejectFrom(status)) {
+            throw new IllegalClaimTransitionException(status, ClaimStatus.REJECTED);
+        }
+        if (!reasonMatches(status, reason)) {
+            throw new IllegalClaimTransitionException(status, reason);
+        }
+        var updatedEvents = new ArrayList<ClaimEvent>(events);
+        updatedEvents.add(new ClaimStatusChanged(
+                status, ClaimStatus.REJECTED, Optional.of(reason), clock.instant()));
+        return copyWith(ClaimStatus.REJECTED, Optional.of(reason), List.copyOf(updatedEvents));
+    }
+
+    private Claim copyWith(ClaimStatus status, Optional<RejectionReason> rejectionReason, List<ClaimEvent> events) {
         return new Claim(
                 id,
                 clientId,
@@ -85,8 +116,23 @@ public final class Claim {
                 incidentDate,
                 dateOfDeath,
                 deathCertificateRef,
-                next,
-                List.copyOf(updatedEvents));
+                status,
+                rejectionReason,
+                events);
+    }
+
+    private static boolean canRejectFrom(ClaimStatus status) {
+        return status == ClaimStatus.ACCEPTED || status == ClaimStatus.AWAITING_ANALYST;
+    }
+
+    private static boolean reasonMatches(ClaimStatus status, RejectionReason reason) {
+        return switch (status) {
+            case ACCEPTED -> reason == RejectionReason.UNKNOWN_CLIENT
+                    || reason == RejectionReason.POLICY_LAPSED
+                    || reason == RejectionReason.NO_COVER;
+            case AWAITING_ANALYST -> reason == RejectionReason.ANALYST_REJECTED;
+            default -> false;
+        };
     }
 
     private static void validate(
@@ -163,6 +209,10 @@ public final class Claim {
 
     public ClaimStatus status() {
         return status;
+    }
+
+    public Optional<RejectionReason> rejectionReason() {
+        return rejectionReason;
     }
 
     public List<ClaimEvent> events() {
