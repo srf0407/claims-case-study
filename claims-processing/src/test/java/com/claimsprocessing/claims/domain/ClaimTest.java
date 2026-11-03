@@ -33,6 +33,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 
 class ClaimTest {
 
+    private static final BigDecimal STRAIGHT_THROUGH_LIMIT = new BigDecimal("10000.00");
     private static final Set<List<ClaimStatus>> LEGAL_PAIRS = Set.of(
             List.of(ACCEPTED, AWAITING_ANALYST),
             List.of(ACCEPTED, PAYMENT_PENDING),
@@ -396,6 +397,104 @@ class ClaimTest {
                 .hasMessage("reason");
         assertThat(claim.status()).isEqualTo(ACCEPTED);
         assertThat(claim.rejectionReason()).isEmpty();
+        assertThat(claim.events()).isEqualTo(eventsBefore);
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = ClaimType.class, names = {"DISABILITY", "FUNERAL"})
+    void should_treat_a_non_death_claim_under_the_limit_as_eligible(ClaimType claimType) {
+        // given
+        Claim claim = aClaim().claimType(claimType).amount(new BigDecimal("9999.99")).build();
+
+        // when
+        boolean eligible = claim.isEligibleForStraightThrough(STRAIGHT_THROUGH_LIMIT, false);
+
+        // then
+        assertThat(eligible).isTrue();
+    }
+
+    @Test
+    void should_treat_a_death_claim_as_ineligible_for_straight_through() {
+        // given
+        Claim claim = aClaim().death().amount(new BigDecimal("9999.99")).build();
+
+        // when
+        boolean eligible = claim.isEligibleForStraightThrough(STRAIGHT_THROUGH_LIMIT, false);
+
+        // then
+        assertThat(eligible).isFalse();
+    }
+
+    @Test
+    void should_treat_an_amount_equal_to_the_limit_as_ineligible() {
+        // given
+        Claim claim = aClaim().amount(new BigDecimal("10000.0")).build();
+
+        // when
+        boolean eligible = claim.isEligibleForStraightThrough(STRAIGHT_THROUGH_LIMIT, false);
+
+        // then
+        assertThat(eligible).isFalse();
+    }
+
+    @Test
+    void should_treat_an_amount_over_the_limit_as_ineligible() {
+        // given
+        Claim claim = aClaim().amount(new BigDecimal("10000.01")).build();
+
+        // when
+        boolean eligible = claim.isEligibleForStraightThrough(STRAIGHT_THROUGH_LIMIT, false);
+
+        // then
+        assertThat(eligible).isFalse();
+    }
+
+    @Test
+    void should_treat_a_flagged_claim_as_ineligible_for_straight_through() {
+        // given
+        Claim claim = aClaim().amount(new BigDecimal("9999.99")).build();
+
+        // when
+        boolean eligible = claim.isEligibleForStraightThrough(STRAIGHT_THROUGH_LIMIT, true);
+
+        // then
+        assertThat(eligible).isFalse();
+    }
+
+    @Test
+    void should_treat_a_claim_as_ineligible_when_the_limit_is_zero() {
+        // given
+        Claim claim = aClaim().build();
+
+        // when
+        boolean eligible = claim.isEligibleForStraightThrough(BigDecimal.ZERO, false);
+
+        // then
+        assertThat(eligible).isFalse();
+    }
+
+    @Test
+    void should_reject_a_null_limit() {
+        // given
+        Claim claim = aClaim().build();
+
+        // when / then
+        assertThatThrownBy(() -> claim.isEligibleForStraightThrough(null, false))
+                .isInstanceOf(NullPointerException.class)
+                .hasMessage("limit");
+    }
+
+    @Test
+    void should_leave_the_claim_unchanged_when_straight_through_eligibility_is_checked() {
+        // given
+        Claim claim = aClaim().amount(new BigDecimal("9999.99")).build();
+        List<ClaimEvent> eventsBefore = List.copyOf(claim.events());
+
+        // when
+        claim.isEligibleForStraightThrough(STRAIGHT_THROUGH_LIMIT, false);
+
+        // then
+        assertThat(claim.status()).isEqualTo(ACCEPTED);
         assertThat(claim.events()).isEqualTo(eventsBefore);
     }
 
