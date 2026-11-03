@@ -28,7 +28,7 @@ Draft order; reorder or cut freely.
 
 ## 3. Domain and use cases
 
-- [ ] Claim domain model (types, statuses, transition rules)
+- [x] Claim domain model (types, statuses, transition rules)
 - [ ] Submit claim use case
 - [ ] Validate client use case
 - [ ] Assess policy and benefits use case

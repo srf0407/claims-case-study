@@ -28,6 +28,8 @@ The channel submits a claim as JSON. The minimum fields are:
 - `amount`
 - `incidentDate`
 
+The sample claim types are DEATH, DISABILITY, and FUNERAL. The list is illustrative and would come from the business. Only DEATH has special rules (ADR-0003).
+
 A death claim also includes `dateOfDeath` and `deathCertificateRef`.
 
 Payee bank details come from the Client Registry, not the form.
@@ -74,6 +76,7 @@ Queues and storage are behind ports. Sample code keeps them in memory.
 ## Assumptions
 
 - Queues and claim storage sit behind ports. Implementations in this sample are in memory.
+- Ideal production design: full event sourcing (state rebuilt from the claim's events, stored in an event store, published as claim events, for example to EventBridge). Payment status still uses the webhook per ADR-0002. This case study keeps a small in-memory event history on the Claim as a step towards it.
 - The design maps the running system to AWS: API Gateway, ECS Fargate, SQS (a normal queue, a death-claim priority queue, and a dead-letter queue), DynamoDB, CloudWatch SLA alarms, and Secrets Manager. Payment status uses neither EventBridge nor SNS.
 - The Payment System is assumed external, based on its 'Third Party' label in the case-study context diagram. It therefore reports status through an HTTPS webhook, not our internal event bus. The brief does not confirm this.
 - LocalStack SQS is an optional profile, added only if that backlog item is picked up.
@@ -93,3 +96,5 @@ Leave these unset. Do not invent values for them in code or in this file.
 | Whether the analyst queue is a separate port from the SQS queues | Not assigned to a ticket yet |
 | Analyst decision endpoint (approve or reject a queued claim, for example `POST /claims/{id}/decision`) | Not assigned to a ticket yet |
 | What happens after PAYMENT_FAILED (retry payment, analyst review, or terminal) | Not assigned to a ticket yet |
+| Currency and scale of amount | Not decided |
+| Full event sourcing for the claim | Not assigned to a ticket yet |
