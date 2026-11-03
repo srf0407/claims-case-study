@@ -29,11 +29,12 @@ Draft order; reorder or cut freely.
 ## 3. Domain and use cases
 
 - [x] Claim domain model (types, statuses, transition rules)
-- [ ] Submit claim use case
+- [x] Submit claim use case
 - [ ] Validate client use case
 - [ ] Assess policy and benefits use case
 - [ ] Initiate payment use case
 - [ ] Apply payment status use case
+- [ ] Enqueue accepted claims for the worker (queue port, in-memory fake)
 - [ ] Death-claim priority handling
 - [ ] Remove ArchUnit empty-layer allowances (withOptionalLayers, failOnEmptyShould) once each layer has classes
 
