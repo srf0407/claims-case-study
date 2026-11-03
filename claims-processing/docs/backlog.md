@@ -32,7 +32,8 @@ Draft order; reorder or cut freely.
 - [x] Submit claim use case
 - [x] Validate client use case
 - [x] Assess policy and benefits use case
-- [ ] Initiate payment use case
+- [x] Initiate payment use case
+- [ ] Straight-through payment for eligible accepted claims (needs limit and flag decided)
 - [ ] Apply payment status use case
 - [ ] Enqueue accepted claims for the worker (queue port, in-memory fake)
 - [ ] Death-claim priority handling
