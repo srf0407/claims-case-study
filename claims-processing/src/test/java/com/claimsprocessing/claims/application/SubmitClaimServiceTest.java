@@ -11,6 +11,9 @@ import java.time.ZoneOffset;
 
 import com.claimsprocessing.claims.application.port.in.SubmitClaimCommand;
 import com.claimsprocessing.claims.application.port.in.SubmitClaimUseCase;
+import com.claimsprocessing.claims.application.port.out.ClaimQueueUnavailableException;
+import com.claimsprocessing.claims.application.port.out.ClaimQueuedMessage;
+import com.claimsprocessing.claims.application.port.out.InMemoryClaimQueue;
 import com.claimsprocessing.claims.application.port.out.InMemoryClaimRepository;
 import com.claimsprocessing.claims.domain.ClaimAccepted;
 import com.claimsprocessing.claims.domain.ClaimId;
@@ -25,7 +28,9 @@ class SubmitClaimServiceTest {
 
     private final Clock clock = Clock.fixed(ACCEPTED_AT, ZoneOffset.UTC);
     private final InMemoryClaimRepository claims = new InMemoryClaimRepository();
-    private final SubmitClaimUseCase submitClaim = new SubmitClaimService(claims, clock);
+    private final InMemoryClaimQueue queue = new InMemoryClaimQueue();
+    private final SubmitClaimUseCase submitClaim =
+            new SubmitClaimService(claims, queue, new ClaimQueuedMessageMapper(), clock);
 
     @Test
     void should_store_an_accepted_claim_and_return_its_id() {
@@ -53,14 +58,7 @@ class SubmitClaimServiceTest {
     void should_store_death_fields_on_a_death_claim() {
         // given
         var dateOfDeath = LocalDate.of(2026, 2, 20);
-        var command = new SubmitClaimCommand(
-                ClaimType.DEATH,
-                "C-9",
-                "P-9",
-                new BigDecimal("250.00"),
-                LocalDate.of(2026, 3, 1),
-                dateOfDeath,
-                "CERT-9");
+        var command = deathCommand(dateOfDeath);
 
         // when
         ClaimId id = submitClaim.submit(command);
@@ -89,6 +87,84 @@ class SubmitClaimServiceTest {
     }
 
     @Test
+    void should_enqueue_an_accepted_claim_with_its_id_and_type() {
+        // given
+        var command = funeralCommand();
+
+        // when
+        ClaimId id = submitClaim.submit(command);
+
+        // then
+        var stored = claims.findById(id).orElseThrow();
+        assertThat(stored.status()).isEqualTo(ClaimStatus.ACCEPTED);
+        assertThat(stored.events()).containsExactly(new ClaimAccepted(ACCEPTED_AT));
+        assertThat(queue.messages()).containsExactly(new ClaimQueuedMessage(id, ClaimType.FUNERAL));
+    }
+
+    @Test
+    void should_enqueue_a_death_claim_with_its_id_and_type() {
+        // given
+        var command = deathCommand(LocalDate.of(2026, 2, 20));
+
+        // when
+        ClaimId id = submitClaim.submit(command);
+
+        // then
+        assertThat(claims.findById(id).orElseThrow().status()).isEqualTo(ClaimStatus.ACCEPTED);
+        assertThat(queue.messages()).containsExactly(new ClaimQueuedMessage(id, ClaimType.DEATH));
+    }
+
+    @Test
+    void should_enqueue_both_claims_when_submit_is_repeated() {
+        // given
+        var command = funeralCommand();
+
+        // when
+        ClaimId first = submitClaim.submit(command);
+        ClaimId second = submitClaim.submit(command);
+
+        // then
+        assertThat(queue.messages()).containsExactly(
+                new ClaimQueuedMessage(first, ClaimType.FUNERAL),
+                new ClaimQueuedMessage(second, ClaimType.FUNERAL));
+    }
+
+    @Test
+    void should_leave_the_stored_claim_when_the_queue_is_unavailable() {
+        // given
+        var command = funeralCommand();
+        queue.willFail(new ClaimQueueUnavailableException("Claim queue is unavailable"));
+
+        // when / then
+        assertThatThrownBy(() -> submitClaim.submit(command))
+                .isInstanceOf(ClaimQueueUnavailableException.class);
+        assertThat(queue.messages()).isEmpty();
+        assertThat(claims.savedClaims()).singleElement().satisfies(stored -> {
+            assertThat(stored.status()).isEqualTo(ClaimStatus.ACCEPTED);
+            assertThat(stored.events()).containsExactly(new ClaimAccepted(ACCEPTED_AT));
+        });
+    }
+
+    @Test
+    void should_enqueue_only_the_later_claim_when_submit_is_repeated_after_the_queue_was_unavailable() {
+        // given
+        var command = funeralCommand();
+        queue.failOnce(new ClaimQueueUnavailableException("Claim queue is unavailable"));
+
+        // when
+        assertThatThrownBy(() -> submitClaim.submit(command))
+                .isInstanceOf(ClaimQueueUnavailableException.class);
+        ClaimId later = submitClaim.submit(command);
+
+        // then
+        assertThat(queue.messages()).containsExactly(new ClaimQueuedMessage(later, ClaimType.FUNERAL));
+        assertThat(claims.savedClaims()).hasSize(2);
+        assertThat(claims.savedClaims().get(0).id()).isNotEqualTo(later);
+        assertThat(claims.savedClaims().get(0).status()).isEqualTo(ClaimStatus.ACCEPTED);
+        assertThat(claims.findById(later).orElseThrow().status()).isEqualTo(ClaimStatus.ACCEPTED);
+    }
+
+    @Test
     void should_save_nothing_when_the_claim_is_rejected() {
         // given
         var command = new SubmitClaimCommand(
@@ -104,6 +180,7 @@ class SubmitClaimServiceTest {
         assertThatThrownBy(() -> submitClaim.submit(command))
                 .isInstanceOf(InvalidClaimException.class);
         assertThat(claims.isEmpty()).isTrue();
+        assertThat(queue.messages()).isEmpty();
     }
 
     @Test
@@ -113,6 +190,7 @@ class SubmitClaimServiceTest {
                 .isInstanceOf(NullPointerException.class)
                 .hasMessage("command");
         assertThat(claims.isEmpty()).isTrue();
+        assertThat(queue.messages()).isEmpty();
     }
 
     private static SubmitClaimCommand funeralCommand() {
@@ -124,5 +202,16 @@ class SubmitClaimServiceTest {
                 LocalDate.of(2026, 3, 1),
                 null,
                 null);
+    }
+
+    private static SubmitClaimCommand deathCommand(LocalDate dateOfDeath) {
+        return new SubmitClaimCommand(
+                ClaimType.DEATH,
+                "C-9",
+                "P-9",
+                new BigDecimal("250.00"),
+                LocalDate.of(2026, 3, 1),
+                dateOfDeath,
+                "CERT-9");
     }
 }

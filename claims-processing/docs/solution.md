@@ -99,3 +99,4 @@ Leave these unset. Do not invent values for them in code or in this file.
 | Currency and scale of amount | Not decided |
 | Full event sourcing for the claim | Not assigned to a ticket yet |
 | Where payee bank details are held (claim or payment request) | Not assigned to a ticket yet |
+| Save-then-enqueue gap (transactional outbox in production) | Not assigned to a ticket yet |
