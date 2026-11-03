@@ -34,7 +34,7 @@ Draft order; reorder or cut freely.
 - [x] Assess policy and benefits use case
 - [x] Initiate payment use case
 - [ ] Straight-through payment for eligible accepted claims (needs limit and flag decided)
-- [ ] Apply payment status use case
+- [x] Apply payment status use case
 - [ ] Enqueue accepted claims for the worker (queue port, in-memory fake)
 - [ ] Death-claim priority handling
 - [ ] Remove ArchUnit empty-layer allowances (withOptionalLayers, failOnEmptyShould) once each layer has classes
