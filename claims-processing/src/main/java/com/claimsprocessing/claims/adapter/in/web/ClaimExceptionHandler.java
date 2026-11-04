@@ -8,9 +8,11 @@ import org.slf4j.LoggerFactory;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.web.ErrorResponse;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
@@ -45,6 +47,11 @@ public class ClaimExceptionHandler {
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ProblemDetail> handleUnexpected(Exception exception, HttpServletRequest request) {
+        // ErrorResponse is not a Throwable, so it cannot be an @ExceptionHandler type.
+        // Spring MVC client errors implement it and would otherwise become a 500.
+        if (exception instanceof ErrorResponse errorResponse) {
+            return handleRequestError(errorResponse, request);
+        }
         log.error("Unexpected failure", exception);
         return problem(
                 request,
@@ -52,6 +59,25 @@ public class ClaimExceptionHandler {
                 "/problems/internal-error",
                 "Internal error",
                 "An unexpected error occurred");
+    }
+
+    private static ResponseEntity<ProblemDetail> handleRequestError(
+            ErrorResponse error, HttpServletRequest request) {
+        HttpStatusCode statusCode = error.getStatusCode();
+        return ProblemDetails.of(
+                "/problems/request-error",
+                reasonPhrase(statusCode),
+                statusCode.value(),
+                "Request could not be handled",
+                request.getRequestURI());
+    }
+
+    private static String reasonPhrase(HttpStatusCode statusCode) {
+        HttpStatus status = HttpStatus.resolve(statusCode.value());
+        if (status == null) {
+            return Integer.toString(statusCode.value());
+        }
+        return status.getReasonPhrase();
     }
 
     private static ResponseEntity<ProblemDetail> malformed(HttpServletRequest request, String detail) {

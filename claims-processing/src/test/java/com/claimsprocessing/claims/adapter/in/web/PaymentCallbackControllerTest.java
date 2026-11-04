@@ -1,6 +1,7 @@
 package com.claimsprocessing.claims.adapter.in.web;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
@@ -22,7 +23,12 @@ import com.claimsprocessing.claims.application.port.in.GetClaimUseCase;
 import com.claimsprocessing.claims.application.port.in.SubmitClaimCommand;
 import com.claimsprocessing.claims.application.port.in.SubmitClaimUseCase;
 import com.claimsprocessing.claims.domain.ClaimId;
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import org.junit.jupiter.api.Test;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.MediaType;
 import org.springframework.http.converter.json.JacksonJsonHttpMessageConverter;
 import org.springframework.test.web.servlet.MockMvc;
@@ -317,6 +323,59 @@ class PaymentCallbackControllerTest {
     }
 
     @Test
+    void should_return_404_for_an_unknown_path() throws Exception {
+        // given
+        MockMvc mockMvc = bothControllers();
+        ListAppender<ILoggingEvent> logs = attachHandlerLog();
+
+        // when
+        ResultActions actions;
+        try {
+            actions = mockMvc.perform(get("/nope"));
+        } finally {
+            detachHandlerLog(logs);
+        }
+
+        // then
+        expectProblem(
+                actions,
+                404,
+                "/problems/request-error",
+                "Not Found",
+                "Request could not be handled",
+                "/nope");
+        assertThat(actions.andReturn().getResponse().getContentAsString()).doesNotContain("NoResourceFoundException");
+        assertThat(logs.list).extracting(ILoggingEvent::getLevel).doesNotContain(Level.ERROR);
+    }
+
+    @Test
+    void should_return_405_for_a_wrong_method() throws Exception {
+        // given
+        MockMvc mockMvc = bothControllers();
+        ListAppender<ILoggingEvent> logs = attachHandlerLog();
+
+        // when
+        ResultActions actions;
+        try {
+            actions = mockMvc.perform(delete("/claims"));
+        } finally {
+            detachHandlerLog(logs);
+        }
+
+        // then
+        expectProblem(
+                actions,
+                405,
+                "/problems/request-error",
+                "Method Not Allowed",
+                "Request could not be handled",
+                "/claims");
+        assertThat(actions.andReturn().getResponse().getContentAsString())
+                .doesNotContain("HttpRequestMethodNotSupportedException");
+        assertThat(logs.list).extracting(ILoggingEvent::getLevel).doesNotContain(Level.ERROR);
+    }
+
+    @Test
     void should_return_500_when_the_callback_fails_unexpectedly() throws Exception {
         // given
         FakeApplyPaymentStatus useCase = new FakeApplyPaymentStatus(new RuntimeException("secret-marker"));
@@ -395,6 +454,31 @@ class PaymentCallbackControllerTest {
                 .andExpect(jsonPath("$.status").value(status))
                 .andExpect(jsonPath("$.detail").value(detail))
                 .andExpect(jsonPath("$.instance").value(instance));
+    }
+
+    private MockMvc bothControllers() {
+        return MockMvcBuilders.standaloneSetup(
+                        new ClaimController(
+                                unusedSubmit(), new SubmitClaimMapper(), query -> {
+                                    throw new UnsupportedOperationException("get");
+                                }, new GetClaimMapper()),
+                        callbackController(new FakeApplyPaymentStatus(PaymentStatusResult.APPLIED)))
+                .setControllerAdvice(new ClaimExceptionHandler(), new PaymentCallbackExceptionHandler())
+                .setMessageConverters(new JacksonJsonHttpMessageConverter())
+                .build();
+    }
+
+    private static ListAppender<ILoggingEvent> attachHandlerLog() {
+        Logger logger = (Logger) LoggerFactory.getLogger(ClaimExceptionHandler.class);
+        ListAppender<ILoggingEvent> appender = new ListAppender<>();
+        appender.start();
+        logger.addAppender(appender);
+        return appender;
+    }
+
+    private static void detachHandlerLog(ListAppender<ILoggingEvent> appender) {
+        Logger logger = (Logger) LoggerFactory.getLogger(ClaimExceptionHandler.class);
+        logger.detachAppender(appender);
     }
 
     private MockMvc callbackMvc(ApplyPaymentStatusUseCase useCase) {
