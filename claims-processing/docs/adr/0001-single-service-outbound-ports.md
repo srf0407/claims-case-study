@@ -32,4 +32,4 @@ The queue is one port. Whether the analyst queue is a separate port stays on the
 
 ## Implementation note (2026-11-04)
 
-The analyst decision endpoint is `POST /claims/{id}/decision`. Profile `localstack` adds SQS and DynamoDB adapters behind the same ports. The Policy Manager adapter does not read portfolio. See [solution.md](../solution.md).
+The analyst decision endpoint is `POST /claims/{id}/decision`. Profile `localstack` adds SQS and DynamoDB adapters behind the same ports. The sample Policy Manager adapter reads status and a covered boolean. The ideal contract adds plan, benefit, and a cover limit. See [context.md](../diagrams/context.md) and [solution.md](../solution.md).

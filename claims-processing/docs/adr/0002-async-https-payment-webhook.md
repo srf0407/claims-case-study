@@ -20,6 +20,8 @@ The Client Registry and the Policy Manager are called during claim processing. A
 
 Option 2. The Payment System is assumed external, based on its 'Third Party' label in the case-study context diagram. It therefore reports status through an HTTPS webhook, not our internal event bus. The brief does not confirm this.
 
+The list below is the ideal. The sample signs the callback and applies `PAID` or `PAYMENT_FAILED` in the request. It acknowledges a claim message only after the client, policy, or payment call has moved the claim. A timeout leaves the message, and the next poll tries it again. The queued callback, the 1s, 2s, 4s backoff, and the dead-letter flag are not in the sample.
+
 EventBridge versus SNS is closed as neither needed for one external caller.
 
 - The webhook comes through API Gateway to the payment-status endpoint. The callback is signed so only Payment can call it. A webhook that fails the signature check returns 401 and is not queued.
@@ -39,4 +41,4 @@ EventBridge versus SNS is closed as neither needed for one external caller.
 
 ## Implementation note (2026-11-04)
 
-The sample applies the callback in the request and deletes the SQS message on receive. The queued callback and the 1s, 2s, 4s backoff are not implemented yet. See the Open table in [solution.md](../solution.md).
+The sample applies the callback in the request. It acknowledges a claim message after the claim has moved, and a timeout is tried again on the next poll. The queued callback, the 1s, 2s, 4s backoff, and the dead-letter flag are the ideal in the decision above, and they are not in the sample. The ideal claim lifecycle is the second diagram in [state-claim.md](../diagrams/state-claim.md). See the Open table in [solution.md](../solution.md).

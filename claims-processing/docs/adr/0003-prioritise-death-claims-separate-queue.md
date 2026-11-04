@@ -19,16 +19,20 @@ ADR-0001 defines one queue port and leaves a separate analyst-queue port open. A
 
 Option 2. A separate queue can be drained first behind the one port ADR-0001 already set, and it is the death-claim SQS queue `solution.md` already names.
 
+The sample runs that queue and drains it first. A death claim never straight-throughs. The sample clock runs only in `ACCEPTED` and `AWAITING_ANALYST` ([ADR-0004](0004-death-claim-sla-alarms-through-an-outbound-port.md)). The sample applies a payment callback in the request, so a death-claim payment update does not use this queue.
+
+The list below is the ideal for what the death queue carries and for what happens when retries run out. Flagging from `ACCEPTED` moves the claim to `AWAITING_ANALYST`, so the clock keeps running. A `PAYMENT_FAILED` death claim returns to `AWAITING_ANALYST`, and the clock runs again from the original accept time. `PAYMENT_PENDING` does not run this clock. See the ideal diagram in [state-claim.md](../diagrams/state-claim.md).
+
 - The SLA is 4 clock hours from accept (`POST /claims` accepts the claim) until the analyst decision. If the claim is rejected with no analyst decision, the clock stops at that rejection. The number is an assumption pending business confirmation. The duration is a config value; the default is 4 hours.
 - A warning alarm fires at 75% of the configured duration, so there is a warning before the breach. At the default that is 3 hours. A breach alarm fires at the configured duration.
 - For a claim type of `DEATH`, the priority queue carries the client and policy checks, the analyst handoff, and the payment-status update. Ordinary claims, including their payment-status updates, use the normal queue.
-- A death-claim message that exhausts its retries goes to the dead-letter queue and is flagged to the priority analyst queue, and the SLA clock keeps running.
+- A death-claim processing message that exhausts its retries goes to the dead-letter queue and is flagged to the priority analyst queue. The claim moves to `AWAITING_ANALYST`, so the SLA clock keeps running. A callback that exhausts its retries leaves the claim `PAYMENT_PENDING` and flagged, and this clock stays stopped.
 - The separate analyst-queue port stays open. This ADR adds no port.
 
 ## Consequences
 
 - The in-memory adapter implements both queues behind the one port. `config` supplies the SLA duration. AWS mapping (docs only): death-claim messages go to the death-claim SQS queue, other messages go to the normal SQS queue, and CloudWatch alarms fire at 75% and at the SLA. Showing that warning in the Claims System UI stays out of scope.
-- The payment-status use case still calls the queue port from ADR-0001. The call carries that the claim is a death claim, using the type already stored on the claim, and the adapter selects the priority queue.
-- ADR-0002's retry still applies on whichever queue holds the message: 4 receives, backoff 1s, 2s, 4s. Against a 4-hour SLA that budget is about 7 seconds. When a death-claim message exhausts those receives, it goes to the dead-letter queue, the claim is flagged to the priority analyst queue, and the SLA clock keeps running.
+- In the ideal, the payment-status use case calls the queue port from ADR-0001. The call carries that the claim is a death claim, using the type already stored on the claim, and the adapter selects the priority queue. The sample applies the callback in the request and does not call that port.
+- ADR-0002's retry is the ideal on whichever queue holds the message: 4 receives, backoff 1s, 2s, 4s. Against a 4-hour SLA that budget is about 7 seconds. When a death-claim processing message exhausts those receives, it goes to the dead-letter queue, the claim is flagged to the priority analyst queue, and the SLA clock keeps running. The sample leaves a failed message in flight and tries it again on the next poll. It does not apply that backoff, and it does not flag the claim.
 - One worker finishes the message it has, then drains the priority queue before the normal queue. A burst of ordinary claims waits. A normal message already in progress runs to the end of that attempt.
 - This ADR does not set the straight-through limit, flags, borderline cases, or the analyst decision endpoint.
