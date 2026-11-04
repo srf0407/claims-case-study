@@ -44,9 +44,9 @@ Draft order; reorder or cut freely.
 
 ## 4. Adapters
 
-- [ ] Claim intake endpoint (`POST /claims`)
-- [ ] Claim status endpoint (`GET /claims/{id}`)
-- [ ] Payment status callback endpoint
+- [x] Claim intake endpoint (`POST /claims`)
+- [x] Claim status endpoint (`GET /claims/{id}`)
+- [x] Payment status callback endpoint
 - [x] Client Registry client + WireMock tests
 - [x] Policy Manager client + WireMock tests
 - [x] Payment client + WireMock tests

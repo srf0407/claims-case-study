@@ -5,5 +5,6 @@ import java.time.Duration;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 @ConfigurationProperties(prefix = "claims.payment")
-public record PaymentProperties(String baseUrl, Duration connectTimeout, Duration readTimeout) {
+public record PaymentProperties(
+        String baseUrl, Duration connectTimeout, Duration readTimeout, String callbackSecret) {
 }

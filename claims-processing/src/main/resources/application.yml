@@ -11,3 +11,4 @@ claims:
     base-url: http://localhost:8083
     connect-timeout: 2s
     read-timeout: 5s
+    callback-secret: dev-callback-secret
