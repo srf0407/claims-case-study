@@ -46,7 +46,7 @@ Draft order; reorder or cut freely.
 
 - [x] Claim intake endpoint (`POST /claims`)
 - [x] Claim status endpoint (`GET /claims/{id}`)
-- [ ] Payment status callback endpoint
+- [x] Payment status callback endpoint
 - [x] Client Registry client + WireMock tests
 - [x] Policy Manager client + WireMock tests
 - [x] Payment client + WireMock tests

@@ -103,3 +103,4 @@ Rows without a decided "where it is set" cell are still open. Do not invent valu
 | Where payee bank details are held (claim or payment request) | Not assigned to a ticket yet |
 | Save-then-enqueue gap (transactional outbox in production) | Not assigned to a ticket yet |
 | Retries, backoff and dead-letter for worker failures (SQS redrive in the queue adapter; the in-memory fake removes on receive, so a failed message is lost in tests) | Not assigned to a ticket yet |
+| Queue payment callbacks before applying (ADR-0002) | The endpoint applies synchronously for now |
