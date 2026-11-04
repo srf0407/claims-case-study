@@ -36,3 +36,7 @@ EventBridge versus SNS is closed as neither needed for one external caller.
 - The web adapter does not call the queue adapter. The use case depends on the queue port.
 - This ADR uses that one queue port. It does not decide a separate analyst-queue port, and it does not decide whether a death-claim payment status uses the priority queue.
 - If Payment turns out to be internal and on AWS, publishing payment events to EventBridge is an easy upgrade (adapter and docs change, use cases don't). Add this to "Recommended changes" when that backlog item is written. This ADR does not fill that placeholder.
+
+## Implementation note (2026-11-04)
+
+The sample applies the callback in the request and deletes the SQS message on receive. The queued callback and the 1s, 2s, 4s backoff are not implemented yet. See the Open table in [solution.md](../solution.md).
