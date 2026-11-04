@@ -1,4 +1,4 @@
-These systems are not connected today. This diagram shows the links the solution proposes.
+`claims-processing` is the link between the web form, the Claims System UI, the Client Registry, the Policy Manager, and the Payment System.
 
 ```mermaid
 flowchart LR

@@ -5,7 +5,7 @@ Date: 2026-11-02 · Decided by: The developer
 
 ## Context
 
-The Claims System exists and is not connected to the Client Registry, the Policy Manager, or the Payment System. `claims-processing` is the Claims System API: one deployable that owns input checks, the claim lifecycle, step order, failure handling, and death-claim priority. Client rules stay in the Client Registry. Policy, plan, and benefit rules stay in the Policy Manager. Portfolio information is context only.
+The Claims System was not connected to the Client Registry, the Policy Manager, or the Payment System. `claims-processing` is that link. It is one deployable that owns input checks, the claim lifecycle, step order, failure handling, and death-claim priority. It calls the Client Registry and the Policy Manager, and it initiates payment with the Payment System. Client rules stay in the Client Registry. Policy, plan, and benefit rules stay in the Policy Manager.
 
 `AGENTS.md` already places outbound ports in `application.port.out` and their clients in `adapter.out`. `solution.md` puts the Client Registry, the Policy Manager, Payment, claim storage, and queues behind those ports. This sample keeps the adapters in memory and mocks the three external HTTP systems with WireMock. How payment status is delivered, and how death claims are prioritised, are later ADRs.
 
