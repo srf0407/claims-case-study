@@ -22,6 +22,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.UUID;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -625,6 +626,249 @@ class ClaimTest {
                         Instant.parse("2026-01-15T13:00:00Z"), null, DEATH_SLA_WARNING_FRACTION))
                 .isInstanceOf(NullPointerException.class)
                 .hasMessage("duration");
+    }
+
+    @Test
+    void should_restore_a_claim_with_the_given_id_status_and_events() {
+        // given
+        var id = new ClaimId(UUID.randomUUID());
+        var amount = new BigDecimal("10.50");
+        var incidentDate = LocalDate.of(2026, 1, 15);
+        var occurredAt = Instant.parse("2026-01-15T10:00:00Z");
+        List<ClaimEvent> events = List.of(new ClaimAccepted(occurredAt));
+
+        // when
+        Claim restored = Claim.restore(
+                id,
+                "client-1",
+                "POL-1",
+                ClaimType.FUNERAL,
+                amount,
+                incidentDate,
+                null,
+                null,
+                ACCEPTED,
+                Optional.empty(),
+                events);
+
+        // then
+        assertThat(restored.id()).isEqualTo(id);
+        assertThat(restored.clientId()).isEqualTo("client-1");
+        assertThat(restored.policyNumber()).isEqualTo("POL-1");
+        assertThat(restored.claimType()).isEqualTo(ClaimType.FUNERAL);
+        assertThat(restored.amount()).isEqualTo(amount);
+        assertThat(restored.incidentDate()).isEqualTo(incidentDate);
+        assertThat(restored.dateOfDeath()).isNull();
+        assertThat(restored.deathCertificateRef()).isNull();
+        assertThat(restored.status()).isEqualTo(ACCEPTED);
+        assertThat(restored.rejectionReason()).isEmpty();
+        assertThat(restored.events()).containsExactly(new ClaimAccepted(occurredAt));
+    }
+
+    @Test
+    void should_restore_a_rejected_death_claim() {
+        // given
+        var id = new ClaimId(UUID.randomUUID());
+        var amount = new BigDecimal("250.00");
+        var incidentDate = LocalDate.of(2026, 3, 1);
+        var dateOfDeath = LocalDate.of(2026, 2, 20);
+        var acceptedAt = Instant.parse("2026-03-01T08:00:00Z");
+        var rejectedAt = Instant.parse("2026-03-01T09:00:00Z");
+        List<ClaimEvent> events = List.of(
+                new ClaimAccepted(acceptedAt),
+                new ClaimStatusChanged(
+                        ACCEPTED, REJECTED, Optional.of(RejectionReason.UNKNOWN_CLIENT), rejectedAt));
+
+        // when
+        Claim restored = Claim.restore(
+                id,
+                "client-1",
+                "POL-1",
+                ClaimType.DEATH,
+                amount,
+                incidentDate,
+                dateOfDeath,
+                "DC-1",
+                REJECTED,
+                Optional.of(RejectionReason.UNKNOWN_CLIENT),
+                events);
+
+        // then
+        assertThat(restored.id()).isEqualTo(id);
+        assertThat(restored.claimType()).isEqualTo(ClaimType.DEATH);
+        assertThat(restored.amount()).isEqualTo(amount);
+        assertThat(restored.incidentDate()).isEqualTo(incidentDate);
+        assertThat(restored.dateOfDeath()).isEqualTo(dateOfDeath);
+        assertThat(restored.deathCertificateRef()).isEqualTo("DC-1");
+        assertThat(restored.status()).isEqualTo(REJECTED);
+        assertThat(restored.rejectionReason()).contains(RejectionReason.UNKNOWN_CLIENT);
+        assertThat(restored.events()).containsExactlyElementsOf(events);
+    }
+
+    @Test
+    void should_keep_the_restored_events_when_the_input_list_changes() {
+        // given
+        var occurredAt = Instant.parse("2026-01-15T10:00:00Z");
+        var events = new ArrayList<ClaimEvent>();
+        events.add(new ClaimAccepted(occurredAt));
+
+        // when
+        Claim restored = Claim.restore(
+                new ClaimId(UUID.randomUUID()),
+                "client-1",
+                "POL-1",
+                ClaimType.FUNERAL,
+                new BigDecimal("10.50"),
+                LocalDate.of(2026, 1, 15),
+                null,
+                null,
+                ACCEPTED,
+                Optional.empty(),
+                events);
+        events.add(new ClaimStatusChanged(
+                ACCEPTED, AWAITING_ANALYST, Optional.empty(), Instant.parse("2026-01-15T11:00:00Z")));
+
+        // then
+        assertThat(restored.events()).containsExactly(new ClaimAccepted(occurredAt));
+    }
+
+    @ParameterizedTest
+    @MethodSource("missingEvents")
+    void should_reject_a_restore_with_no_events(List<ClaimEvent> events) {
+        // given / when / then
+        assertThatThrownBy(() -> Claim.restore(
+                        new ClaimId(UUID.randomUUID()),
+                        "client-1",
+                        "POL-1",
+                        ClaimType.FUNERAL,
+                        new BigDecimal("10.50"),
+                        LocalDate.of(2026, 1, 15),
+                        null,
+                        null,
+                        ACCEPTED,
+                        Optional.empty(),
+                        events))
+                .isInstanceOf(InvalidClaimException.class);
+    }
+
+    @Test
+    void should_reject_a_restore_with_a_blank_client_id() {
+        // given / when / then
+        assertThatThrownBy(() -> Claim.restore(
+                        new ClaimId(UUID.randomUUID()),
+                        " ",
+                        "POL-1",
+                        ClaimType.FUNERAL,
+                        new BigDecimal("10.50"),
+                        LocalDate.of(2026, 1, 15),
+                        null,
+                        null,
+                        ACCEPTED,
+                        Optional.empty(),
+                        List.of(new ClaimAccepted(Instant.parse("2026-01-15T10:00:00Z")))))
+                .isInstanceOf(InvalidClaimException.class);
+    }
+
+    @Test
+    void should_reject_a_restored_death_claim_without_a_date_of_death() {
+        // given / when / then
+        assertThatThrownBy(() -> Claim.restore(
+                        new ClaimId(UUID.randomUUID()),
+                        "client-1",
+                        "POL-1",
+                        ClaimType.DEATH,
+                        new BigDecimal("10.50"),
+                        LocalDate.of(2026, 1, 15),
+                        null,
+                        "DC-1",
+                        ACCEPTED,
+                        Optional.empty(),
+                        List.of(new ClaimAccepted(Instant.parse("2026-01-15T10:00:00Z")))))
+                .isInstanceOf(InvalidClaimException.class);
+    }
+
+    @Test
+    void should_reject_a_restored_non_death_claim_that_has_death_fields() {
+        // given / when / then
+        assertThatThrownBy(() -> Claim.restore(
+                        new ClaimId(UUID.randomUUID()),
+                        "client-1",
+                        "POL-1",
+                        ClaimType.FUNERAL,
+                        new BigDecimal("10.50"),
+                        LocalDate.of(2026, 1, 15),
+                        LocalDate.of(2026, 2, 20),
+                        null,
+                        ACCEPTED,
+                        Optional.empty(),
+                        List.of(new ClaimAccepted(Instant.parse("2026-01-15T10:00:00Z")))))
+                .isInstanceOf(InvalidClaimException.class);
+    }
+
+    @ParameterizedTest(name = "{0} with {1}")
+    @MethodSource("restorationReasonsThatDoNotMatchStatus")
+    void should_reject_a_restore_whose_rejection_reason_does_not_match_its_status(
+            ClaimStatus status, Optional<RejectionReason> rejectionReason) {
+        // given / when / then
+        assertThatThrownBy(() -> Claim.restore(
+                        new ClaimId(UUID.randomUUID()),
+                        "client-1",
+                        "POL-1",
+                        ClaimType.FUNERAL,
+                        new BigDecimal("10.50"),
+                        LocalDate.of(2026, 1, 15),
+                        null,
+                        null,
+                        status,
+                        rejectionReason,
+                        List.of(new ClaimAccepted(Instant.parse("2026-01-15T10:00:00Z")))))
+                .isInstanceOf(InvalidClaimException.class);
+    }
+
+    @Test
+    void should_reject_a_restore_with_a_null_status() {
+        // given / when / then
+        assertThatThrownBy(() -> Claim.restore(
+                        new ClaimId(UUID.randomUUID()),
+                        "client-1",
+                        "POL-1",
+                        ClaimType.FUNERAL,
+                        new BigDecimal("10.50"),
+                        LocalDate.of(2026, 1, 15),
+                        null,
+                        null,
+                        null,
+                        Optional.empty(),
+                        List.of(new ClaimAccepted(Instant.parse("2026-01-15T10:00:00Z")))))
+                .isInstanceOf(InvalidClaimException.class);
+    }
+
+    @Test
+    void should_reject_a_restore_with_a_null_id() {
+        // given / when / then
+        assertThatThrownBy(() -> Claim.restore(
+                        null,
+                        "client-1",
+                        "POL-1",
+                        ClaimType.FUNERAL,
+                        new BigDecimal("10.50"),
+                        LocalDate.of(2026, 1, 15),
+                        null,
+                        null,
+                        ACCEPTED,
+                        Optional.empty(),
+                        List.of(new ClaimAccepted(Instant.parse("2026-01-15T10:00:00Z")))))
+                .isInstanceOf(InvalidClaimException.class);
+    }
+
+    private static Stream<List<ClaimEvent>> missingEvents() {
+        return Stream.of(null, List.of());
+    }
+
+    private static Stream<Arguments> restorationReasonsThatDoNotMatchStatus() {
+        return Stream.of(
+                Arguments.of(REJECTED, Optional.empty()),
+                Arguments.of(ACCEPTED, Optional.of(RejectionReason.UNKNOWN_CLIENT)));
     }
 
     private static Stream<Arguments> legalPairs() {
