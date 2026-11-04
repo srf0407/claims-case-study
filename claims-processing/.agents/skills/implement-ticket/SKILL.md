@@ -62,11 +62,12 @@ Use the `review-changes` skill, passing this slice's diff, the ticket and the ve
 ## 8. Hand over - STOP
 Show: files changed (one line each), verify result, the review report, and questions. Ask:
 - which review findings to act on,
-- whether to log this with `scripts/log-ai.ps1` (propose the `-Task`/`-Outcome`/`-Notes` text),
 - whether to start the next slice, or, once the last slice is approved, whether to tick the item off in `docs/backlog.md`.
+
+Do not add an AI log to a follow-up pull request. The task log in `docs/ai-usage.md` stays in the case-study write-up.
 
 STOP.
 
 ## Needs explicit approval every time
-Commits, pushes, PRs, new dependencies, edits to `docs/` or ADRs, running `log-ai.ps1`, ticking `docs/backlog.md`. Answers
+Commits, pushes, PRs, new dependencies, edits to `docs/` or ADRs, ticking `docs/backlog.md`. Do not add an AI log to a follow-up pull request. Answers
 to questions go into `docs/` or an ADR only after the developer agrees on the wording.
