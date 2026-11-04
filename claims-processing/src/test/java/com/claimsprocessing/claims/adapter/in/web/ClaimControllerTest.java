@@ -14,8 +14,11 @@ import java.util.UUID;
 
 import com.claimsprocessing.claims.application.ClaimQueuedMessageMapper;
 import com.claimsprocessing.claims.application.SubmitClaimService;
+import com.claimsprocessing.claims.application.port.in.GetClaimQuery;
+import com.claimsprocessing.claims.application.port.in.GetClaimUseCase;
 import com.claimsprocessing.claims.application.port.in.SubmitClaimCommand;
 import com.claimsprocessing.claims.application.port.in.SubmitClaimUseCase;
+import com.claimsprocessing.claims.domain.Claim;
 import com.claimsprocessing.claims.application.port.out.InMemoryClaimQueue;
 import com.claimsprocessing.claims.application.port.out.InMemoryClaimRepository;
 import com.claimsprocessing.claims.domain.ClaimId;
@@ -101,8 +104,9 @@ class ClaimControllerTest {
     }
 
     private static MockMvc mockMvc(SubmitClaimUseCase useCase) {
-        return MockMvcBuilders.standaloneSetup(new ClaimController(useCase, new SubmitClaimMapper()))
-                .setControllerAdvice(new InvalidClaimExceptionHandler())
+        return MockMvcBuilders.standaloneSetup(new ClaimController(
+                        useCase, new SubmitClaimMapper(), unusedGet(), new GetClaimMapper()))
+                .setControllerAdvice(new ClaimExceptionHandler())
                 .setMessageConverters(new JacksonJsonHttpMessageConverter())
                 .build();
     }
@@ -118,5 +122,14 @@ class ClaimControllerTest {
             this.command = command;
             return new ClaimId(UUID.fromString(CLAIM_ID));
         }
+    }
+
+    private static GetClaimUseCase unusedGet() {
+        return new GetClaimUseCase() {
+            @Override
+            public Claim get(GetClaimQuery query) {
+                throw new UnsupportedOperationException("get");
+            }
+        };
     }
 }
