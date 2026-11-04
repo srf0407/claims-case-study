@@ -2,6 +2,8 @@ package com.claimsprocessing.claims.adapter.out.queue;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.time.Clock;
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -53,7 +55,9 @@ class SqsClaimQueueIT {
                 sqsClient,
                 DEATH_QUEUE,
                 STANDARD_QUEUE,
-                new SqsClaimMessageMapper(JsonMapper.builder().build()));
+                new SqsClaimMessageMapper(JsonMapper.builder().build()),
+                Clock.systemUTC(),
+                Duration.ofSeconds(30));
     }
 
     @AfterAll
@@ -66,9 +70,11 @@ class SqsClaimQueueIT {
     @BeforeEach
     void emptyQueues() {
         for (int attempt = 0; attempt < 20; attempt++) {
-            if (queue.receive().isEmpty()) {
+            Optional<ClaimQueuedMessage> received = queue.receive();
+            if (received.isEmpty()) {
                 return;
             }
+            queue.acknowledge(received.get());
         }
         throw new AssertionError("queues still returned a message after 20 receives");
     }
@@ -143,6 +149,7 @@ class SqsClaimQueueIT {
 
         // when
         Optional<ClaimQueuedMessage> first = queue.receive();
+        queue.acknowledge(first.orElseThrow());
         Optional<ClaimQueuedMessage> second = queue.receive();
 
         // then
@@ -160,7 +167,7 @@ class SqsClaimQueueIT {
     }
 
     @Test
-    void should_delete_a_received_message() {
+    void should_return_the_same_message_until_it_is_acknowledged() {
         // given
         ClaimQueuedMessage message = new ClaimQueuedMessage(DELETED_ID, ClaimType.FUNERAL);
         queue.enqueue(message);
@@ -168,10 +175,13 @@ class SqsClaimQueueIT {
         // when
         Optional<ClaimQueuedMessage> first = queue.receive();
         Optional<ClaimQueuedMessage> second = queue.receive();
+        queue.acknowledge(first.orElseThrow());
+        Optional<ClaimQueuedMessage> third = queue.receive();
 
         // then
         assertThat(first).contains(message);
-        assertThat(second).isEmpty();
+        assertThat(second).contains(message);
+        assertThat(third).isEmpty();
     }
 
     private static String visibilityTimeout(String queueName) {

@@ -51,6 +51,7 @@ class InMemoryClaimQueueTest {
 
         // when
         var firstReceived = queue.receive();
+        queue.acknowledge(firstReceived.orElseThrow());
         var secondReceived = queue.receive();
 
         // then
@@ -69,6 +70,7 @@ class InMemoryClaimQueueTest {
 
         // when
         var firstReceived = queue.receive();
+        queue.acknowledge(firstReceived.orElseThrow());
         var secondReceived = queue.receive();
 
         // then
@@ -77,7 +79,7 @@ class InMemoryClaimQueueTest {
     }
 
     @Test
-    void should_drop_a_message_from_the_waiting_list_when_it_is_received() {
+    void should_keep_a_message_until_it_is_acknowledged() {
         // given
         var queue = new InMemoryClaimQueue();
         var death = message("11111111-1111-1111-1111-111111111111", ClaimType.DEATH);
@@ -88,6 +90,9 @@ class InMemoryClaimQueueTest {
 
         // then
         assertThat(received).contains(death);
+        assertThat(queue.messages()).containsExactly(death);
+        assertThat(queue.receive()).contains(death);
+        queue.acknowledge(death);
         assertThat(queue.messages()).isEmpty();
         assertThat(queue.receive()).isEmpty();
     }

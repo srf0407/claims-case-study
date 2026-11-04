@@ -9,6 +9,11 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.time.Clock;
+import java.time.Duration;
+import java.time.Instant;
+import java.time.ZoneId;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.UUID;
 import java.util.function.Predicate;
@@ -33,6 +38,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.slf4j.LoggerFactory;
 import software.amazon.awssdk.services.sqs.SqsClient;
+import software.amazon.awssdk.services.sqs.model.ChangeMessageVisibilityRequest;
 import software.amazon.awssdk.services.sqs.model.DeleteMessageRequest;
 import software.amazon.awssdk.services.sqs.model.DeleteMessageResponse;
 import software.amazon.awssdk.services.sqs.model.GetQueueUrlRequest;
@@ -71,7 +77,7 @@ class SqsClaimQueueTest {
             };
             return GetQueueUrlResponse.builder().queueUrl(queueUrl).build();
         });
-        queue = new SqsClaimQueue(sqsClient, DEATH_QUEUE, STANDARD_QUEUE, mapper);
+        queue = newQueue(sqsClient, Clock.systemUTC(), Duration.ofSeconds(30));
     }
 
     @Test
@@ -109,7 +115,7 @@ class SqsClaimQueueTest {
     }
 
     @Test
-    void should_return_a_death_message_and_delete_it_without_reading_the_standard_queue() {
+    void should_return_a_death_message_without_reading_the_standard_queue_and_delete_it_on_acknowledge() {
         // given
         ClaimQueuedMessage message = new ClaimQueuedMessage(CLAIM_ID, ClaimType.DEATH);
         when(sqsClient.receiveMessage(any(ReceiveMessageRequest.class))).thenAnswer(invocation -> {
@@ -127,6 +133,8 @@ class SqsClaimQueueTest {
 
         // then
         assertThat(received).contains(message);
+        verify(sqsClient, never()).deleteMessage(any(DeleteMessageRequest.class));
+        queue.acknowledge(received.orElseThrow());
         ArgumentCaptor<ReceiveMessageRequest> polls = ArgumentCaptor.forClass(ReceiveMessageRequest.class);
         verify(sqsClient).receiveMessage(polls.capture());
         assertShortPoll(polls.getValue(), DEATH_URL);
@@ -138,7 +146,7 @@ class SqsClaimQueueTest {
     }
 
     @Test
-    void should_return_a_standard_message_and_delete_it_when_the_death_queue_is_empty() {
+    void should_return_a_standard_message_when_the_death_queue_is_empty_and_delete_it_on_acknowledge() {
         // given
         ClaimQueuedMessage message = new ClaimQueuedMessage(CLAIM_ID, ClaimType.FUNERAL);
         when(sqsClient.receiveMessage(any(ReceiveMessageRequest.class))).thenAnswer(invocation -> {
@@ -156,6 +164,8 @@ class SqsClaimQueueTest {
 
         // then
         assertThat(received).contains(message);
+        verify(sqsClient, never()).deleteMessage(any(DeleteMessageRequest.class));
+        queue.acknowledge(received.orElseThrow());
         InOrder order = inOrder(sqsClient);
         order.verify(sqsClient).receiveMessage(aRequest(request -> shortPoll(request, DEATH_URL)));
         order.verify(sqsClient).receiveMessage(aRequest(request -> shortPoll(request, STANDARD_URL)));
@@ -224,18 +234,72 @@ class SqsClaimQueueTest {
     }
 
     @Test
-    void should_throw_queue_unavailable_when_the_delete_fails() {
+    void should_clear_the_in_flight_message_when_the_delete_fails() {
         // given
         RuntimeException failure = new RuntimeException("delete-down");
         ClaimQueuedMessage message = new ClaimQueuedMessage(CLAIM_ID, ClaimType.DEATH);
         when(sqsClient.receiveMessage(any(ReceiveMessageRequest.class)))
                 .thenReturn(response(sqsMessage(mapper.toBody(message))));
         when(sqsClient.deleteMessage(any(DeleteMessageRequest.class))).thenThrow(failure);
+        var received = queue.receive();
 
         // when / then
-        assertThatThrownBy(queue::receive)
+        assertThatThrownBy(() -> queue.acknowledge(received.orElseThrow()))
                 .isInstanceOf(ClaimQueueUnavailableException.class)
                 .hasCause(failure);
+        assertThat(queue.receive()).contains(message);
+        verify(sqsClient, org.mockito.Mockito.times(2)).receiveMessage(any(ReceiveMessageRequest.class));
+    }
+
+    @Test
+    void should_refresh_the_receipt_handle_while_the_message_is_still_invisible() {
+        // given
+        MutableClock clock = new MutableClock(Instant.parse("2026-11-04T18:00:00Z"));
+        SqsClaimQueue timedQueue = newQueue(sqsClient, clock, Duration.ofSeconds(30));
+        ClaimQueuedMessage message = new ClaimQueuedMessage(CLAIM_ID, ClaimType.DEATH);
+        when(sqsClient.receiveMessage(any(ReceiveMessageRequest.class)))
+                .thenReturn(response(sqsMessage(mapper.toBody(message))));
+        timedQueue.receive();
+        clock.advance(Duration.ofSeconds(5));
+
+        // when
+        var again = timedQueue.receive();
+
+        // then
+        assertThat(again).contains(message);
+        ArgumentCaptor<ChangeMessageVisibilityRequest> refreshed =
+                ArgumentCaptor.forClass(ChangeMessageVisibilityRequest.class);
+        verify(sqsClient).changeMessageVisibility(refreshed.capture());
+        assertThat(refreshed.getValue().queueUrl()).isEqualTo(DEATH_URL);
+        assertThat(refreshed.getValue().receiptHandle()).isEqualTo("rh-1");
+        assertThat(refreshed.getValue().visibilityTimeout()).isEqualTo(30);
+        verify(sqsClient).receiveMessage(any(ReceiveMessageRequest.class));
+    }
+
+    @Test
+    void should_poll_again_when_the_visibility_timeout_has_elapsed() {
+        // given
+        MutableClock clock = new MutableClock(Instant.parse("2026-11-04T18:00:00Z"));
+        SqsClaimQueue timedQueue = newQueue(sqsClient, clock, Duration.ofSeconds(30));
+        ClaimQueuedMessage message = new ClaimQueuedMessage(CLAIM_ID, ClaimType.DEATH);
+        when(sqsClient.receiveMessage(any(ReceiveMessageRequest.class)))
+                .thenReturn(response(sqsMessage(mapper.toBody(message), "rh-1")))
+                .thenReturn(response(sqsMessage(mapper.toBody(message), "rh-2")));
+        when(sqsClient.deleteMessage(any(DeleteMessageRequest.class)))
+                .thenReturn(DeleteMessageResponse.builder().build());
+        timedQueue.receive();
+        clock.advance(Duration.ofSeconds(30));
+
+        // when
+        var again = timedQueue.receive();
+        timedQueue.acknowledge(again.orElseThrow());
+
+        // then
+        assertThat(again).contains(message);
+        verify(sqsClient, never()).changeMessageVisibility(any(ChangeMessageVisibilityRequest.class));
+        ArgumentCaptor<DeleteMessageRequest> deleted = ArgumentCaptor.forClass(DeleteMessageRequest.class);
+        verify(sqsClient).deleteMessage(deleted.capture());
+        assertThat(deleted.getValue().receiptHandle()).isEqualTo("rh-2");
     }
 
     @ParameterizedTest
@@ -278,7 +342,7 @@ class SqsClaimQueueTest {
         when(client.getQueueUrl(any(GetQueueUrlRequest.class))).thenThrow(failure);
 
         // when / then
-        assertThatThrownBy(() -> new SqsClaimQueue(client, DEATH_QUEUE, STANDARD_QUEUE, mapper))
+        assertThatThrownBy(() -> newQueue(client, Clock.systemUTC(), Duration.ofSeconds(30)))
                 .isInstanceOf(ClaimQueueUnavailableException.class)
                 .hasCause(failure);
     }
@@ -317,8 +381,16 @@ class SqsClaimQueueTest {
         return ReceiveMessageResponse.builder().messages(List.of()).build();
     }
 
+    private SqsClaimQueue newQueue(SqsClient client, Clock clock, Duration visibilityTimeout) {
+        return new SqsClaimQueue(client, DEATH_QUEUE, STANDARD_QUEUE, mapper, clock, visibilityTimeout);
+    }
+
     private static Message sqsMessage(String body) {
-        return Message.builder().messageId("msg-123").receiptHandle("rh-1").body(body).build();
+        return sqsMessage(body, "rh-1");
+    }
+
+    private static Message sqsMessage(String body, String receiptHandle) {
+        return Message.builder().messageId("msg-123").receiptHandle(receiptHandle).body(body).build();
     }
 
     private static ListAppender<ILoggingEvent> attachQueueLog() {
@@ -332,5 +404,33 @@ class SqsClaimQueueTest {
     private static void detachQueueLog(ListAppender<ILoggingEvent> appender) {
         Logger logger = (Logger) LoggerFactory.getLogger(SqsClaimQueue.class);
         logger.detachAppender(appender);
+    }
+
+    private static final class MutableClock extends Clock {
+
+        private Instant instant;
+
+        private MutableClock(Instant instant) {
+            this.instant = instant;
+        }
+
+        private void advance(Duration duration) {
+            instant = instant.plus(duration);
+        }
+
+        @Override
+        public ZoneId getZone() {
+            return ZoneOffset.UTC;
+        }
+
+        @Override
+        public Clock withZone(ZoneId zone) {
+            return this;
+        }
+
+        @Override
+        public Instant instant() {
+            return instant;
+        }
     }
 }

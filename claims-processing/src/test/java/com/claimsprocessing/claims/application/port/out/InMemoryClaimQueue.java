@@ -11,6 +11,7 @@ public final class InMemoryClaimQueue implements ClaimQueuePort {
 
     private final List<ClaimQueuedMessage> deathMessages = new ArrayList<>();
     private final List<ClaimQueuedMessage> normalMessages = new ArrayList<>();
+    private ClaimQueuedMessage inflight;
     private ClaimQueueUnavailableException failure;
     private int failuresLeft;
 
@@ -24,8 +25,11 @@ public final class InMemoryClaimQueue implements ClaimQueuePort {
         this.failuresLeft = 1;
     }
 
-    public List<ClaimQueuedMessage> messages() {
-        var waiting = new ArrayList<ClaimQueuedMessage>(deathMessages.size() + normalMessages.size());
+    public synchronized List<ClaimQueuedMessage> messages() {
+        var waiting = new ArrayList<ClaimQueuedMessage>(deathMessages.size() + normalMessages.size() + 1);
+        if (inflight != null) {
+            waiting.add(inflight);
+        }
         waiting.addAll(deathMessages);
         waiting.addAll(normalMessages);
         return List.copyOf(waiting);
@@ -46,13 +50,30 @@ public final class InMemoryClaimQueue implements ClaimQueuePort {
     }
 
     @Override
-    public Optional<ClaimQueuedMessage> receive() {
+    public synchronized Optional<ClaimQueuedMessage> receive() {
+        if (inflight != null) {
+            return Optional.of(inflight);
+        }
         if (!deathMessages.isEmpty()) {
-            return Optional.of(deathMessages.removeFirst());
+            inflight = deathMessages.removeFirst();
+            return Optional.of(inflight);
         }
         if (!normalMessages.isEmpty()) {
-            return Optional.of(normalMessages.removeFirst());
+            inflight = normalMessages.removeFirst();
+            return Optional.of(inflight);
         }
         return Optional.empty();
+    }
+
+    @Override
+    public synchronized void acknowledge(ClaimQueuedMessage message) {
+        Objects.requireNonNull(message, "message");
+        if (inflight == null) {
+            return;
+        }
+        if (!inflight.equals(message)) {
+            throw new IllegalStateException("Claim queue message is not in flight");
+        }
+        inflight = null;
     }
 }

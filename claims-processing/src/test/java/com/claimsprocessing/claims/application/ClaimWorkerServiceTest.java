@@ -222,17 +222,20 @@ class ClaimWorkerServiceTest {
     }
 
     @Test
-    void should_propagate_a_client_check_failure() {
+    void should_leave_the_message_when_the_client_check_fails() {
         // given
-        enqueue(ClaimType.FUNERAL);
+        ClaimId claimId = enqueue(ClaimType.FUNERAL);
         var failure = new ClientRegistryUnavailableException("Client Registry is unavailable");
         validateClient.willFail(failure);
 
         // when / then
         assertThatThrownBy(worker::process).isSameAs(failure);
+        assertThatThrownBy(worker::process).isSameAs(failure);
+        assertThat(validateClient.commands())
+                .containsExactly(new ValidateClientCommand(claimId), new ValidateClientCommand(claimId));
         assertThat(assessPolicy.commands()).isEmpty();
         assertThat(straightThroughPayment.commands()).isEmpty();
-        assertThat(claimQueue.messages()).isEmpty();
+        assertThat(claimQueue.messages()).containsExactly(new ClaimQueuedMessage(claimId, ClaimType.FUNERAL));
     }
 
     @Test
@@ -246,12 +249,13 @@ class ClaimWorkerServiceTest {
         assertThatThrownBy(worker::process).isSameAs(failure);
         assertThat(assessPolicy.commands()).isEmpty();
         assertThat(straightThroughPayment.commands()).isEmpty();
+        assertThat(claimQueue.messages()).isEmpty();
     }
 
     @Test
     void should_propagate_a_policy_check_failure() {
         // given
-        enqueue(ClaimType.FUNERAL);
+        ClaimId claimId = enqueue(ClaimType.FUNERAL);
         validateClient.willAnswer(ClientCheckResult.KNOWN);
         var failure = new PolicyManagerUnavailableException("Policy Manager is unavailable");
         assessPolicy.willFail(failure);
@@ -259,6 +263,7 @@ class ClaimWorkerServiceTest {
         // when / then
         assertThatThrownBy(worker::process).isSameAs(failure);
         assertThat(straightThroughPayment.commands()).isEmpty();
+        assertThat(claimQueue.messages()).containsExactly(new ClaimQueuedMessage(claimId, ClaimType.FUNERAL));
     }
 
     @Test
@@ -274,6 +279,7 @@ class ClaimWorkerServiceTest {
         assertThatThrownBy(worker::process).isSameAs(failure);
         assertThat(validateClient.commands()).containsExactly(new ValidateClientCommand(claimId));
         assertThat(assessPolicy.commands()).containsExactly(new AssessPolicyCommand(claimId));
+        assertThat(claimQueue.messages()).containsExactly(new ClaimQueuedMessage(claimId, ClaimType.FUNERAL));
     }
 
     private ClaimId enqueue(ClaimType claimType) {
@@ -298,6 +304,11 @@ class ClaimWorkerServiceTest {
         @Override
         public Optional<ClaimQueuedMessage> receive() {
             throw failure;
+        }
+
+        @Override
+        public void acknowledge(ClaimQueuedMessage message) {
+            throw new UnsupportedOperationException("acknowledge");
         }
     }
 
