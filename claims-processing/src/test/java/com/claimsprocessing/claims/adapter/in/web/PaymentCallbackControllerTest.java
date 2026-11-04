@@ -301,7 +301,12 @@ class PaymentCallbackControllerTest {
         };
         MockMvc mockMvc = MockMvcBuilders.standaloneSetup(
                         new ClaimController(
-                                unusedSubmit(), new SubmitClaimMapper(), getClaim, new GetClaimMapper()),
+                                unusedSubmit(),
+                                new SubmitClaimMapper(),
+                                getClaim,
+                                new GetClaimMapper(),
+                                unusedDecide(),
+                                new DecideClaimMapper()),
                         callbackController(new FakeApplyPaymentStatus(PaymentStatusResult.APPLIED)))
                 .setControllerAdvice(new ClaimExceptionHandler(), new PaymentCallbackExceptionHandler())
                 .setMessageConverters(new JacksonJsonHttpMessageConverter())
@@ -460,11 +465,15 @@ class PaymentCallbackControllerTest {
     private MockMvc bothControllers() {
         return MockMvcBuilders.standaloneSetup(
                         new ClaimController(
-                                unusedSubmit(), new SubmitClaimMapper(), query -> {
+                                unusedSubmit(),
+                                new SubmitClaimMapper(),
+                                query -> {
                                     throw new UnsupportedOperationException("get");
-                                }, new GetClaimMapper()),
-                                }, new GetClaimMapper(),
-                                unusedDecide(), new DecideClaimMapper()),
+                                },
+                                new GetClaimMapper(),
+                                unusedDecide(),
+                                new DecideClaimMapper()),
+                        callbackController(new FakeApplyPaymentStatus(PaymentStatusResult.APPLIED)))
                 .setControllerAdvice(new ClaimExceptionHandler(), new PaymentCallbackExceptionHandler())
                 .setMessageConverters(new JacksonJsonHttpMessageConverter())
                 .build();
@@ -534,13 +543,13 @@ class PaymentCallbackControllerTest {
         };
     }
 
-    private static final class FakeApplyPaymentStatus implements ApplyPaymentStatusUseCase {
     private static DecideClaimUseCase unusedDecide() {
         return command -> {
             throw new UnsupportedOperationException("decide");
         };
     }
 
+    private static final class FakeApplyPaymentStatus implements ApplyPaymentStatusUseCase {
 
         private final PaymentStatusResult result;
         private final RuntimeException failure;

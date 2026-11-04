@@ -38,13 +38,17 @@ public final class DecideClaimService implements DecideClaimUseCase {
         }
         if (command.decision() == ClaimDecision.APPROVE) {
             Claim approved = claim.transitionTo(ClaimStatus.APPROVED, clock);
-            claimRepository.save(approved);
+            if (!claimRepository.replaceIfStatus(approved, ClaimStatus.AWAITING_ANALYST)) {
+                throw new ClaimNotAwaitingAnalystException();
+            }
             initiatePayment.initiate(new InitiatePaymentCommand(approved.id()));
             return claimRepository.findById(approved.id())
                     .orElseThrow(() -> new ClaimNotFoundException(approved.id()));
         }
         Claim rejected = claim.reject(RejectionReason.ANALYST_REJECTED, clock);
-        claimRepository.save(rejected);
+        if (!claimRepository.replaceIfStatus(rejected, ClaimStatus.AWAITING_ANALYST)) {
+            throw new ClaimNotAwaitingAnalystException();
+        }
         return rejected;
     }
 }

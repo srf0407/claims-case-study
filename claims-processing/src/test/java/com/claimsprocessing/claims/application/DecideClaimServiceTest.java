@@ -14,6 +14,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 
 import com.claimsprocessing.claims.application.port.in.ClaimDecision;
 import com.claimsprocessing.claims.application.port.in.DecideClaimCommand;
@@ -135,6 +139,55 @@ class DecideClaimServiceTest {
         assertThat(claims.saveCount()).isZero();
     }
 
+    @Test
+    void should_keep_one_decision_when_approve_and_reject_overlap() throws Exception {
+        // given
+        OverlappingRepository stored = new OverlappingRepository();
+        Claim claim = awaitingAnalyst();
+        stored.store(claim);
+        FakePayment payments = new FakePayment();
+        DecideClaimUseCase decideClaim = new DecideClaimService(
+                stored, new InitiatePaymentService(stored, payments, new PaymentRequestMapper(), clock), clock);
+        AtomicReference<Throwable> approveFailure = new AtomicReference<>();
+        AtomicReference<Throwable> rejectFailure = new AtomicReference<>();
+
+        // when
+        Thread approve = new Thread(() -> decide(decideClaim, claim, ClaimDecision.APPROVE, approveFailure));
+        Thread reject = new Thread(() -> decide(decideClaim, claim, ClaimDecision.REJECT, rejectFailure));
+        approve.start();
+        reject.start();
+        approve.join(TimeUnit.SECONDS.toMillis(5));
+        reject.join(TimeUnit.SECONDS.toMillis(5));
+        assertThat(approve.isAlive()).isFalse();
+        assertThat(reject.isAlive()).isFalse();
+
+        // then
+        Claim result = stored.findById(claim.id()).orElseThrow();
+        if (result.status() == ClaimStatus.PAYMENT_PENDING) {
+            assertThat(approveFailure.get()).isNull();
+            assertThat(rejectFailure.get()).isInstanceOf(ClaimNotAwaitingAnalystException.class);
+            assertThat(payments.callCount()).isEqualTo(1);
+        } else {
+            assertThat(result.status()).isEqualTo(ClaimStatus.REJECTED);
+            assertThat(result.rejectionReason()).contains(RejectionReason.ANALYST_REJECTED);
+            assertThat(rejectFailure.get()).isNull();
+            assertThat(approveFailure.get()).isInstanceOf(ClaimNotAwaitingAnalystException.class);
+            assertThat(payments.callCount()).isZero();
+        }
+    }
+
+    private static void decide(
+            DecideClaimUseCase decideClaim,
+            Claim claim,
+            ClaimDecision decision,
+            AtomicReference<Throwable> failure) {
+        try {
+            decideClaim.decide(new DecideClaimCommand(claim.id(), decision));
+        } catch (RuntimeException exception) {
+            failure.set(exception);
+        }
+    }
+
     private Claim awaitingAnalyst() {
         return acceptedClaim().transitionTo(ClaimStatus.AWAITING_ANALYST, clock);
     }
@@ -183,6 +236,52 @@ class DecideClaimServiceTest {
         public void save(Claim claim) {
             saveCount++;
             claims.put(claim.id(), claim);
+        }
+
+        @Override
+        public Optional<Claim> findById(ClaimId id) {
+            return Optional.ofNullable(claims.get(id));
+        }
+
+        @Override
+        public List<Claim> findOpenDeathClaims() {
+            return List.of();
+        }
+    }
+
+    private static final class OverlappingRepository implements ClaimRepositoryPort {
+
+        private final Map<ClaimId, Claim> claims = new ConcurrentHashMap<>();
+        private final CountDownLatch bothReplacing = new CountDownLatch(2);
+
+        void store(Claim claim) {
+            claims.put(claim.id(), claim);
+        }
+
+        @Override
+        public void save(Claim claim) {
+            claims.put(claim.id(), claim);
+        }
+
+        @Override
+        public boolean replaceIfStatus(Claim claim, ClaimStatus expected) {
+            bothReplacing.countDown();
+            try {
+                if (!bothReplacing.await(5, TimeUnit.SECONDS)) {
+                    throw new AssertionError("the other decision did not reach the save");
+                }
+            } catch (InterruptedException exception) {
+                Thread.currentThread().interrupt();
+                throw new AssertionError(exception);
+            }
+            synchronized (claims) {
+                Claim current = claims.get(claim.id());
+                if (current == null || current.status() != expected) {
+                    return false;
+                }
+                claims.put(claim.id(), claim);
+                return true;
+            }
         }
 
         @Override
