@@ -6,7 +6,10 @@ import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.ApplicationContext;
 
-@SpringBootTest(properties = "claims.death-sla.check-interval=PT24H")
+@SpringBootTest(properties = {
+        "claims.death-sla.check-interval=PT24H",
+        "claims.worker.poll-interval=PT24H"
+})
 class ClaimsApplicationTests {
 
     private final ApplicationContext context;

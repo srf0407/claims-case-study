@@ -55,18 +55,19 @@ Draft order; reorder or cut freely.
 
 
 
-## 5. Documentation
+## 5. Close the end-to-end flow
 
-- [ ] Solution description
-- [ ] Assumptions
-- [ ] Recommended changes to existing systems
-- [ ] System interactions (sequence diagrams)
-- [ ] AI usage write-up
-- [ ] README: how to run and test
+- [x] Wire the claim flow: beans for the worker, client, policy, straight-through and payment use cases; scheduled worker; straight-through limit in config; analyst decision endpoint (approve starts payment, reject uses ANALYST_REJECTED); end-to-end test from submit to PAID with WireMock
+- [ ] Runnable stack and hardening: docker compose up works (localstack profile, service-name endpoints, WireMock stubs for Client Registry, Policy Manager and Payment); callback secret from an environment variable; LocalStack tests in CI; DLQ redrive in init-aws.sh or listed as Open
 
+## 6. Documentation
 
+- [ ] solution.md: concise description, assumptions (review), recommended changes to existing systems, and how the systems interact (sequence diagrams for the happy path, death claim, analyst decision and payment callback, plus a short reliability section); fix stale lines (in-memory only, LocalStack out of scope)
+- [ ] README: what it is, project structure and layers, how to run (local, Docker, LocalStack) and test, links to solution.md, the diagrams and the ADRs
+- [x] ai-usage.md: how AI was used, what for, and the approach (AGENTS.md, skills, review gates)
 
-## 6. Optional
-- [x] Death-claim SLA warning and breach alarms (config, monitoring)
+## 7. Final
+
+- [x] Death-claim SLA warning and breach alarms
 - [x] LocalStack integration (SQS / DynamoDB)
 - [ ] Final check against the brief

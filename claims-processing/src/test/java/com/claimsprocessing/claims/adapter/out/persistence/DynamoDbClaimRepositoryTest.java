@@ -30,6 +30,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import software.amazon.awssdk.services.dynamodb.DynamoDbClient;
+import software.amazon.awssdk.services.dynamodb.model.ConditionalCheckFailedException;
 import software.amazon.awssdk.services.dynamodb.model.GetItemRequest;
 import software.amazon.awssdk.services.dynamodb.model.GetItemResponse;
 import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
@@ -232,6 +233,39 @@ class DynamoDbClaimRepositoryTest {
         assertThatThrownBy(() -> repository.findById(new ClaimId(UUID.randomUUID())))
                 .isInstanceOf(ClaimRepositoryUnavailableException.class)
                 .hasCause(failure);
+    }
+
+    @Test
+    void should_replace_only_when_the_stored_status_matches() {
+        // given
+        rememberPuts();
+        Claim awaitingAnalyst = funeral().transitionTo(ClaimStatus.AWAITING_ANALYST, CLOCK);
+
+        // when
+        boolean replaced = repository.replaceIfStatus(awaitingAnalyst, ClaimStatus.ACCEPTED);
+
+        // then
+        assertThat(replaced).isTrue();
+        assertThat(puts).hasSize(1);
+        PutItemRequest put = puts.getFirst();
+        assertThat(put.conditionExpression()).isEqualTo("#status = :expected");
+        assertThat(put.expressionAttributeNames()).containsEntry("#status", "status");
+        assertThat(put.expressionAttributeValues().get(":expected").s()).isEqualTo("ACCEPTED");
+        assertThat(put.item().get("status").s()).isEqualTo("AWAITING_ANALYST");
+    }
+
+    @Test
+    void should_return_false_when_the_status_condition_fails() {
+        // given
+        when(dynamoDbClient.putItem(any(PutItemRequest.class)))
+                .thenThrow(ConditionalCheckFailedException.builder().message("status changed").build());
+        Claim awaitingAnalyst = funeral().transitionTo(ClaimStatus.AWAITING_ANALYST, CLOCK);
+
+        // when
+        boolean replaced = repository.replaceIfStatus(awaitingAnalyst, ClaimStatus.ACCEPTED);
+
+        // then
+        assertThat(replaced).isFalse();
     }
 
     private void rememberPuts() {

@@ -52,6 +52,26 @@ class InMemoryClaimRepositoryTest {
     }
 
     @Test
+    void should_replace_the_claim_only_when_the_status_still_matches() {
+        // given
+        Claim accepted = acceptedClaim();
+        Claim awaitingAnalyst = accepted.transitionTo(ClaimStatus.AWAITING_ANALYST, CLOCK);
+        Claim approved = awaitingAnalyst.transitionTo(ClaimStatus.APPROVED, CLOCK);
+        repository.save(accepted);
+
+        // when
+        boolean replaced = repository.replaceIfStatus(awaitingAnalyst, ClaimStatus.ACCEPTED);
+        boolean rejected = repository.replaceIfStatus(approved, ClaimStatus.ACCEPTED);
+
+        // then
+        assertThat(replaced).isTrue();
+        assertThat(rejected).isFalse();
+        assertThat(repository.findById(accepted.id()).orElseThrow()).isSameAs(awaitingAnalyst);
+        assertThat(repository.findById(accepted.id()).orElseThrow().status())
+                .isEqualTo(ClaimStatus.AWAITING_ANALYST);
+    }
+
+    @Test
     void should_replace_the_claim_when_the_same_id_is_saved_again() {
         // given
         Claim accepted = acceptedClaim();

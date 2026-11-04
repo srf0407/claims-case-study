@@ -23,10 +23,10 @@ stateDiagram-v2
 
 ## Legend
 
-- Straight through means the claim is not a death claim, the client and policy checks pass, the amount is strictly under the limit passed into the straight-through use case, there is no flag, and payment initiate has succeeded. The illustrative default is 10000.00. A flag is a boolean on the straight-through command. Who sets it stays open.
+- Straight through means the claim is not a death claim, the client and policy checks pass, the amount is strictly under the limit from `claims.straight-through.limit` (default 10000.00), passed into the straight-through use case, there is no flag, and payment initiate has succeeded. A flag is a boolean on the straight-through command. Who sets it stays open.
 - Analyst handoff means a death claim that is not a clear business rejection, a high amount, a flag, or a borderline case. Who sets the flag, and what counts as borderline, stay on the Open table.
 - Clear business rejection means unknown client, lapsed policy, or no cover. It is not retried.
-- Retries exhausted change the status only from `ACCEPTED`, to `AWAITING_ANALYST`. Analyst rejection ends at `REJECTED`. The UI makes that decision. The endpoint path stays on the Open table.
+- Retries exhausted change the status only from `ACCEPTED`, to `AWAITING_ANALYST`. Analyst rejection ends at `REJECTED`. The Claims System UI makes that decision by calling `POST /claims/{id}/decision`; approve moves the claim to APPROVED and starts payment.
 - Analyst approves moves the claim from `AWAITING_ANALYST` to `APPROVED`. `APPROVED` moves to `PAYMENT_PENDING` when payment initiate succeeds. Until then the claim stays `APPROVED`.
 - Retries exhausted in `APPROVED` leave the claim `APPROVED` and flag it for an analyst. The SLA clock has already stopped.
 - A payment-status message that exhausts its retries leaves the claim `PAYMENT_PENDING` and flags it for an analyst. On a death claim the SLA clock keeps running.

@@ -19,6 +19,7 @@ import com.claimsprocessing.claims.application.ClaimNotFoundException;
 import com.claimsprocessing.claims.application.PaymentStatusResult;
 import com.claimsprocessing.claims.application.port.in.ApplyPaymentStatusCommand;
 import com.claimsprocessing.claims.application.port.in.ApplyPaymentStatusUseCase;
+import com.claimsprocessing.claims.application.port.in.DecideClaimUseCase;
 import com.claimsprocessing.claims.application.port.in.GetClaimUseCase;
 import com.claimsprocessing.claims.application.port.in.SubmitClaimCommand;
 import com.claimsprocessing.claims.application.port.in.SubmitClaimUseCase;
@@ -300,7 +301,12 @@ class PaymentCallbackControllerTest {
         };
         MockMvc mockMvc = MockMvcBuilders.standaloneSetup(
                         new ClaimController(
-                                unusedSubmit(), new SubmitClaimMapper(), getClaim, new GetClaimMapper()),
+                                unusedSubmit(),
+                                new SubmitClaimMapper(),
+                                getClaim,
+                                new GetClaimMapper(),
+                                unusedDecide(),
+                                new DecideClaimMapper()),
                         callbackController(new FakeApplyPaymentStatus(PaymentStatusResult.APPLIED)))
                 .setControllerAdvice(new ClaimExceptionHandler(), new PaymentCallbackExceptionHandler())
                 .setMessageConverters(new JacksonJsonHttpMessageConverter())
@@ -459,9 +465,14 @@ class PaymentCallbackControllerTest {
     private MockMvc bothControllers() {
         return MockMvcBuilders.standaloneSetup(
                         new ClaimController(
-                                unusedSubmit(), new SubmitClaimMapper(), query -> {
+                                unusedSubmit(),
+                                new SubmitClaimMapper(),
+                                query -> {
                                     throw new UnsupportedOperationException("get");
-                                }, new GetClaimMapper()),
+                                },
+                                new GetClaimMapper(),
+                                unusedDecide(),
+                                new DecideClaimMapper()),
                         callbackController(new FakeApplyPaymentStatus(PaymentStatusResult.APPLIED)))
                 .setControllerAdvice(new ClaimExceptionHandler(), new PaymentCallbackExceptionHandler())
                 .setMessageConverters(new JacksonJsonHttpMessageConverter())
@@ -529,6 +540,12 @@ class PaymentCallbackControllerTest {
             public ClaimId submit(SubmitClaimCommand command) {
                 throw new UnsupportedOperationException("submit");
             }
+        };
+    }
+
+    private static DecideClaimUseCase unusedDecide() {
+        return command -> {
+            throw new UnsupportedOperationException("decide");
         };
     }
 

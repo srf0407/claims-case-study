@@ -22,6 +22,21 @@ public final class InMemoryClaimRepository implements ClaimRepositoryPort {
     }
 
     @Override
+    public boolean replaceIfStatus(Claim claim, ClaimStatus expected) {
+        Objects.requireNonNull(claim, "claim");
+        Objects.requireNonNull(expected, "expected");
+        boolean[] replaced = {false};
+        claims.compute(claim.id(), (id, current) -> {
+            if (current != null && current.status() == expected) {
+                replaced[0] = true;
+                return claim;
+            }
+            return current;
+        });
+        return replaced[0];
+    }
+
+    @Override
     public Optional<Claim> findById(ClaimId id) {
         // HashMap-based implementations return empty for a null id.
         // ConcurrentHashMap.get(null) would throw.

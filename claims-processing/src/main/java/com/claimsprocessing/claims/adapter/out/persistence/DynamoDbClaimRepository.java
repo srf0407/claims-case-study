@@ -10,8 +10,10 @@ import com.claimsprocessing.claims.application.port.out.ClaimRepositoryPort;
 import com.claimsprocessing.claims.application.port.out.ClaimRepositoryUnavailableException;
 import com.claimsprocessing.claims.domain.Claim;
 import com.claimsprocessing.claims.domain.ClaimId;
+import com.claimsprocessing.claims.domain.ClaimStatus;
 import software.amazon.awssdk.services.dynamodb.DynamoDbClient;
 import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
+import software.amazon.awssdk.services.dynamodb.model.ConditionalCheckFailedException;
 import software.amazon.awssdk.services.dynamodb.model.GetItemRequest;
 import software.amazon.awssdk.services.dynamodb.model.GetItemResponse;
 import software.amazon.awssdk.services.dynamodb.model.PutItemRequest;
@@ -38,6 +40,26 @@ public final class DynamoDbClaimRepository implements ClaimRepositoryPort {
                     .tableName(tableName)
                     .item(mapper.toAttributes(claim))
                     .build());
+        } catch (RuntimeException exception) {
+            throw unavailable(exception);
+        }
+    }
+
+    @Override
+    public boolean replaceIfStatus(Claim claim, ClaimStatus expected) {
+        Objects.requireNonNull(claim, "claim");
+        Objects.requireNonNull(expected, "expected");
+        try {
+            dynamoDbClient.putItem(PutItemRequest.builder()
+                    .tableName(tableName)
+                    .item(mapper.toAttributes(claim))
+                    .conditionExpression("#status = :expected")
+                    .expressionAttributeNames(Map.of("#status", "status"))
+                    .expressionAttributeValues(Map.of(":expected", string(expected.name())))
+                    .build());
+            return true;
+        } catch (ConditionalCheckFailedException exception) {
+            return false;
         } catch (RuntimeException exception) {
             throw unavailable(exception);
         }

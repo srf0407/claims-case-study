@@ -13,7 +13,9 @@ public final class DeathClaimSlaCheckScheduler {
         this.useCase = Objects.requireNonNull(useCase, "useCase");
     }
 
-    @Scheduled(fixedDelayString = "${claims.death-sla.check-interval}")
+    @Scheduled(
+            fixedDelayString = "${claims.death-sla.check-interval}",
+            initialDelayString = "${claims.death-sla.check-interval}")
     public void check() {
         useCase.check();
     }

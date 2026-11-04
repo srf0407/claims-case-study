@@ -14,6 +14,7 @@ import java.time.LocalDate;
 import java.time.ZoneOffset;
 
 import com.claimsprocessing.claims.application.ClaimNotFoundException;
+import com.claimsprocessing.claims.application.port.in.DecideClaimUseCase;
 import com.claimsprocessing.claims.application.port.in.GetClaimQuery;
 import com.claimsprocessing.claims.application.port.in.GetClaimUseCase;
 import com.claimsprocessing.claims.application.port.in.SubmitClaimCommand;
@@ -118,7 +119,8 @@ class GetClaimControllerTest {
 
     private static MockMvc mockMvc(GetClaimUseCase useCase) {
         return MockMvcBuilders.standaloneSetup(new ClaimController(
-                        unusedSubmit(), new SubmitClaimMapper(), useCase, new GetClaimMapper()))
+                        unusedSubmit(), new SubmitClaimMapper(), useCase, new GetClaimMapper(),
+                        unusedDecide(), new DecideClaimMapper()))
                 .setControllerAdvice(new ClaimExceptionHandler())
                 .setMessageConverters(new JacksonJsonHttpMessageConverter())
                 .build();
@@ -142,6 +144,12 @@ class GetClaimControllerTest {
             public ClaimId submit(SubmitClaimCommand command) {
                 throw new UnsupportedOperationException("submit");
             }
+        };
+    }
+
+    private static DecideClaimUseCase unusedDecide() {
+        return command -> {
+            throw new UnsupportedOperationException("decide");
         };
     }
 

@@ -4,6 +4,7 @@ import java.net.URI;
 import java.util.Objects;
 import java.util.UUID;
 
+import com.claimsprocessing.claims.application.port.in.DecideClaimUseCase;
 import com.claimsprocessing.claims.application.port.in.GetClaimUseCase;
 import com.claimsprocessing.claims.application.port.in.SubmitClaimUseCase;
 import com.claimsprocessing.claims.domain.Claim;
@@ -25,16 +26,22 @@ public class ClaimController {
     private final SubmitClaimMapper submitClaimMapper;
     private final GetClaimUseCase getClaim;
     private final GetClaimMapper getClaimMapper;
+    private final DecideClaimUseCase decideClaim;
+    private final DecideClaimMapper decideClaimMapper;
 
     public ClaimController(
             SubmitClaimUseCase submitClaim,
             SubmitClaimMapper submitClaimMapper,
             GetClaimUseCase getClaim,
-            GetClaimMapper getClaimMapper) {
+            GetClaimMapper getClaimMapper,
+            DecideClaimUseCase decideClaim,
+            DecideClaimMapper decideClaimMapper) {
         this.submitClaim = Objects.requireNonNull(submitClaim, "submitClaim");
         this.submitClaimMapper = Objects.requireNonNull(submitClaimMapper, "submitClaimMapper");
         this.getClaim = Objects.requireNonNull(getClaim, "getClaim");
         this.getClaimMapper = Objects.requireNonNull(getClaimMapper, "getClaimMapper");
+        this.decideClaim = Objects.requireNonNull(decideClaim, "decideClaim");
+        this.decideClaimMapper = Objects.requireNonNull(decideClaimMapper, "decideClaimMapper");
     }
 
     @PostMapping
@@ -51,5 +58,11 @@ public class ClaimController {
     public GetClaimResponse get(@PathVariable UUID id) {
         Claim claim = getClaim.get(getClaimMapper.toQuery(id));
         return getClaimMapper.toResponse(claim);
+    }
+
+    @PostMapping("/{id}/decision")
+    public DecideClaimResponse decide(@PathVariable UUID id, @RequestBody DecideClaimRequest request) {
+        Claim claim = decideClaim.decide(decideClaimMapper.toCommand(id, request));
+        return decideClaimMapper.toResponse(claim);
     }
 }

@@ -15,6 +15,7 @@ import java.util.UUID;
 
 import com.claimsprocessing.claims.application.ClaimQueuedMessageMapper;
 import com.claimsprocessing.claims.application.SubmitClaimService;
+import com.claimsprocessing.claims.application.port.in.DecideClaimUseCase;
 import com.claimsprocessing.claims.application.port.in.GetClaimQuery;
 import com.claimsprocessing.claims.application.port.in.GetClaimUseCase;
 import com.claimsprocessing.claims.application.port.in.SubmitClaimCommand;
@@ -240,10 +241,21 @@ class ClaimControllerTest {
 
     private static MockMvc mockMvc(SubmitClaimUseCase useCase) {
         return MockMvcBuilders.standaloneSetup(new ClaimController(
-                        useCase, new SubmitClaimMapper(), unusedGet(), new GetClaimMapper()))
+                        useCase,
+                        new SubmitClaimMapper(),
+                        unusedGet(),
+                        new GetClaimMapper(),
+                        unusedDecide(),
+                        new DecideClaimMapper()))
                 .setControllerAdvice(new ClaimExceptionHandler())
                 .setMessageConverters(new JacksonJsonHttpMessageConverter())
                 .build();
+    }
+
+    private static DecideClaimUseCase unusedDecide() {
+        return command -> {
+            throw new UnsupportedOperationException("decide");
+        };
     }
 
     private static final class FakeSubmitClaimUseCase implements SubmitClaimUseCase {

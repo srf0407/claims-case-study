@@ -14,7 +14,11 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import software.amazon.awssdk.services.sqs.SqsClient;
 
-@SpringBootTest(properties = "spring.task.scheduling.enabled=false")
+@SpringBootTest(properties = {
+        "spring.task.scheduling.enabled=false",
+        "claims.death-sla.check-interval=PT24H",
+        "claims.worker.poll-interval=PT24H"
+})
 @ActiveProfiles("localstack")
 class LocalStackConfigTest {
 
