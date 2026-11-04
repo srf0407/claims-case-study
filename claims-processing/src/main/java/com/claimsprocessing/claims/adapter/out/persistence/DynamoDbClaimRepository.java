@@ -1,5 +1,7 @@
 package com.claimsprocessing.claims.adapter.out.persistence;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -13,6 +15,8 @@ import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
 import software.amazon.awssdk.services.dynamodb.model.GetItemRequest;
 import software.amazon.awssdk.services.dynamodb.model.GetItemResponse;
 import software.amazon.awssdk.services.dynamodb.model.PutItemRequest;
+import software.amazon.awssdk.services.dynamodb.model.ScanRequest;
+import software.amazon.awssdk.services.dynamodb.model.ScanResponse;
 
 public final class DynamoDbClaimRepository implements ClaimRepositoryPort {
 
@@ -57,6 +61,43 @@ public final class DynamoDbClaimRepository implements ClaimRepositoryPort {
         } catch (RuntimeException exception) {
             throw unavailable(exception);
         }
+    }
+
+    @Override
+    public List<Claim> findOpenDeathClaims() {
+        try {
+            List<Claim> claims = new ArrayList<>();
+            Map<String, AttributeValue> startKey = null;
+            do {
+                ScanResponse response = dynamoDbClient.scan(openDeathClaims(startKey));
+                for (Map<String, AttributeValue> item : response.items()) {
+                    claims.add(mapper.toClaim(item));
+                }
+                startKey = response.hasLastEvaluatedKey() ? response.lastEvaluatedKey() : null;
+            } while (startKey != null);
+            return List.copyOf(claims);
+        } catch (RuntimeException exception) {
+            throw unavailable(exception);
+        }
+    }
+
+    private ScanRequest openDeathClaims(Map<String, AttributeValue> startKey) {
+        ScanRequest.Builder request = ScanRequest.builder()
+                .tableName(tableName)
+                .filterExpression("#claimType = :death AND (#status = :accepted OR #status = :awaiting)")
+                .expressionAttributeNames(Map.of("#claimType", "claimType", "#status", "status"))
+                .expressionAttributeValues(Map.of(
+                        ":death", string("DEATH"),
+                        ":accepted", string("ACCEPTED"),
+                        ":awaiting", string("AWAITING_ANALYST")));
+        if (startKey != null) {
+            request.exclusiveStartKey(startKey);
+        }
+        return request.build();
+    }
+
+    private static AttributeValue string(String value) {
+        return AttributeValue.builder().s(value).build();
     }
 
     private static ClaimRepositoryUnavailableException unavailable(RuntimeException exception) {

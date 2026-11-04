@@ -7,6 +7,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -97,12 +98,69 @@ class DynamoDbClaimRepositoryIT {
     }
 
     @Test
+    void should_return_only_accepted_and_awaiting_analyst_death_claims() {
+        // given
+        Claim acceptedDeath = death();
+        Claim awaitingAnalyst = death().transitionTo(ClaimStatus.AWAITING_ANALYST, LATER);
+        Claim approved = death()
+                .transitionTo(ClaimStatus.AWAITING_ANALYST, LATER)
+                .transitionTo(ClaimStatus.APPROVED, LATER);
+        Claim rejected = death().reject(RejectionReason.UNKNOWN_CLIENT, LATER);
+        Claim paymentPending = death().transitionTo(ClaimStatus.PAYMENT_PENDING, LATER);
+        Claim paid = death()
+                .transitionTo(ClaimStatus.PAYMENT_PENDING, LATER)
+                .transitionTo(ClaimStatus.PAID, LATER);
+        Claim paymentFailed = death()
+                .transitionTo(ClaimStatus.PAYMENT_PENDING, LATER)
+                .transitionTo(ClaimStatus.PAYMENT_FAILED, LATER);
+        Claim funeral = funeral();
+        Claim disability = Claim.accept(
+                ClaimType.DISABILITY,
+                "client-2",
+                "POL-2",
+                new BigDecimal("80.00"),
+                LocalDate.of(2026, 1, 15),
+                null,
+                null,
+                CLOCK).transitionTo(ClaimStatus.AWAITING_ANALYST, LATER);
+        repository.save(acceptedDeath);
+        repository.save(awaitingAnalyst);
+        repository.save(approved);
+        repository.save(rejected);
+        repository.save(paymentPending);
+        repository.save(paid);
+        repository.save(paymentFailed);
+        repository.save(funeral);
+        repository.save(disability);
+
+        // when
+        List<Claim> open = repository.findOpenDeathClaims();
+
+        // then
+        assertThat(open)
+                .usingRecursiveFieldByFieldElementComparator()
+                .containsExactlyInAnyOrder(acceptedDeath, awaitingAnalyst);
+    }
+
+    @Test
     void should_return_empty_for_an_unknown_id() {
         // when
         Optional<Claim> found = repository.findById(UNKNOWN_ID);
 
         // then
         assertThat(found).isEmpty();
+    }
+
+    private static Claim death() {
+        return Claim.accept(
+                ClaimType.DEATH,
+                "client-1",
+                "POL-1",
+                new BigDecimal("250.00"),
+                LocalDate.of(2026, 1, 15),
+                LocalDate.of(2026, 1, 10),
+                "DC-1",
+                CLOCK);
     }
 
     private static Claim funeral() {

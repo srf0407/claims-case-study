@@ -3,6 +3,7 @@ package com.claimsprocessing.claims.adapter.out.persistence;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -14,6 +15,7 @@ import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 import com.claimsprocessing.claims.application.port.out.ClaimRepositoryUnavailableException;
@@ -30,8 +32,11 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import software.amazon.awssdk.services.dynamodb.DynamoDbClient;
 import software.amazon.awssdk.services.dynamodb.model.GetItemRequest;
 import software.amazon.awssdk.services.dynamodb.model.GetItemResponse;
+import software.amazon.awssdk.services.dynamodb.model.AttributeValue;
 import software.amazon.awssdk.services.dynamodb.model.PutItemRequest;
 import software.amazon.awssdk.services.dynamodb.model.PutItemResponse;
+import software.amazon.awssdk.services.dynamodb.model.ScanRequest;
+import software.amazon.awssdk.services.dynamodb.model.ScanResponse;
 
 @ExtendWith(MockitoExtension.class)
 class DynamoDbClaimRepositoryTest {
@@ -138,6 +143,86 @@ class DynamoDbClaimRepositoryTest {
     }
 
     @Test
+    void should_return_open_death_claims_from_a_filtered_scan() {
+        // given
+        Claim accepted = death();
+        Claim awaitingAnalyst = death().transitionTo(ClaimStatus.AWAITING_ANALYST, LATER);
+        when(dynamoDbClient.scan(any(ScanRequest.class))).thenReturn(ScanResponse.builder()
+                .items(List.of(mapper.toAttributes(accepted), mapper.toAttributes(awaitingAnalyst)))
+                .build());
+
+        // when
+        List<Claim> open = repository.findOpenDeathClaims();
+
+        // then
+        assertThat(open).hasSize(2);
+        assertThat(open.get(0)).usingRecursiveComparison().isEqualTo(accepted);
+        assertThat(open.get(1)).usingRecursiveComparison().isEqualTo(awaitingAnalyst);
+        ArgumentCaptor<ScanRequest> scan = ArgumentCaptor.forClass(ScanRequest.class);
+        verify(dynamoDbClient).scan(scan.capture());
+        assertThat(scan.getValue().tableName()).isEqualTo(TABLE);
+        assertThat(scan.getValue().filterExpression())
+                .isEqualTo("#claimType = :death AND (#status = :accepted OR #status = :awaiting)");
+        assertThat(scan.getValue().expressionAttributeNames())
+                .containsExactlyInAnyOrderEntriesOf(Map.of("#claimType", "claimType", "#status", "status"));
+        assertThat(scan.getValue().expressionAttributeValues().get(":death").s()).isEqualTo("DEATH");
+        assertThat(scan.getValue().expressionAttributeValues().get(":accepted").s()).isEqualTo("ACCEPTED");
+        assertThat(scan.getValue().expressionAttributeValues().get(":awaiting").s()).isEqualTo("AWAITING_ANALYST");
+        assertThat(scan.getValue().exclusiveStartKey()).isEmpty();
+    }
+
+    @Test
+    void should_return_an_empty_list_when_the_scan_has_no_items() {
+        // given
+        when(dynamoDbClient.scan(any(ScanRequest.class))).thenReturn(ScanResponse.builder().build());
+
+        // when
+        List<Claim> open = repository.findOpenDeathClaims();
+
+        // then
+        assertThat(open).isEmpty();
+    }
+
+    @Test
+    void should_read_every_scan_page() {
+        // given
+        Claim accepted = death();
+        Claim awaitingAnalyst = death().transitionTo(ClaimStatus.AWAITING_ANALYST, LATER);
+        Map<String, AttributeValue> pageKey =
+                Map.of("id", AttributeValue.builder().s(accepted.id().value().toString()).build());
+        when(dynamoDbClient.scan(any(ScanRequest.class))).thenReturn(
+                ScanResponse.builder()
+                        .items(List.of(mapper.toAttributes(accepted)))
+                        .lastEvaluatedKey(pageKey)
+                        .build(),
+                ScanResponse.builder().items(List.of(mapper.toAttributes(awaitingAnalyst))).build());
+
+        // when
+        List<Claim> open = repository.findOpenDeathClaims();
+
+        // then
+        assertThat(open).hasSize(2);
+        assertThat(open.get(0)).usingRecursiveComparison().isEqualTo(accepted);
+        assertThat(open.get(1)).usingRecursiveComparison().isEqualTo(awaitingAnalyst);
+        ArgumentCaptor<ScanRequest> scans = ArgumentCaptor.forClass(ScanRequest.class);
+        verify(dynamoDbClient, times(2)).scan(scans.capture());
+        assertThat(scans.getAllValues().get(0).exclusiveStartKey()).isEmpty();
+        assertThat(scans.getAllValues().get(1).exclusiveStartKey()).isEqualTo(pageKey);
+    }
+
+    @Test
+    void should_throw_repository_unavailable_when_the_scan_fails() {
+        // given
+        RuntimeException failure = new RuntimeException("scan-down");
+        when(dynamoDbClient.scan(any(ScanRequest.class))).thenThrow(failure);
+
+        // when / then
+        assertThatThrownBy(() -> repository.findOpenDeathClaims())
+                .isInstanceOf(ClaimRepositoryUnavailableException.class)
+                .hasCause(failure);
+    }
+
+    @Test
     void should_throw_repository_unavailable_when_the_find_fails() {
         // given
         RuntimeException failure = new RuntimeException("get-down");
@@ -163,6 +248,18 @@ class DynamoDbClaimRepositoryTest {
             }
             return GetItemResponse.builder().item(puts.getLast().item()).build();
         });
+    }
+
+    private static Claim death() {
+        return Claim.accept(
+                ClaimType.DEATH,
+                "client-1",
+                "POL-1",
+                new BigDecimal("250.00"),
+                LocalDate.of(2026, 1, 15),
+                LocalDate.of(2026, 1, 10),
+                "DC-1",
+                CLOCK);
     }
 
     private static Claim funeral() {
