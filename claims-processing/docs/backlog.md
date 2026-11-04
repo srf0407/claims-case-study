@@ -44,7 +44,7 @@ Draft order; reorder or cut freely.
 
 ## 4. Adapters
 
-- [ ] Claim intake endpoint (`POST /claims`)
+- [x] Claim intake endpoint (`POST /claims`)
 - [ ] Claim status endpoint (`GET /claims/{id}`)
 - [ ] Payment status callback endpoint
 - [x] Client Registry client + WireMock tests
