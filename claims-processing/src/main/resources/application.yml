@@ -1,0 +1,13 @@
+claims:
+  client-registry:
+    base-url: http://localhost:8081
+    connect-timeout: 2s
+    read-timeout: 5s
+  policy-manager:
+    base-url: http://localhost:8082
+    connect-timeout: 2s
+    read-timeout: 5s
+  payment:
+    base-url: http://localhost:8083
+    connect-timeout: 2s
+    read-timeout: 5s
