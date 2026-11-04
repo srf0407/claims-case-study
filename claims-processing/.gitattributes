@@ -1,1 +1,2 @@
 mvnw text eol=lf
+infra/localstack/ready.d/*.sh text eol=lf
