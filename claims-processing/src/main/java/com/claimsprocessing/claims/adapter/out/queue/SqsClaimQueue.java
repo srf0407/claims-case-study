@@ -26,6 +26,9 @@ public final class SqsClaimQueue implements ClaimQueuePort {
     private final SqsClaimMessageMapper mapper;
     private final String deathQueueUrl;
     private final String standardQueueUrl;
+    private ClaimQueuedMessage inflightMessage;
+    private String inflightQueueUrl;
+    private String inflightReceiptHandle;
 
     public SqsClaimQueue(
             SqsClient sqsClient,
@@ -55,16 +58,34 @@ public final class SqsClaimQueue implements ClaimQueuePort {
     }
 
     @Override
-    public Optional<ClaimQueuedMessage> receive() {
+    public synchronized Optional<ClaimQueuedMessage> receive() {
+        if (inflightMessage != null) {
+            return Optional.of(inflightMessage);
+        }
         Optional<Message> deathMessage = poll(deathQueueUrl);
         if (deathMessage.isPresent()) {
-            return Optional.of(readAndDelete(deathQueueUrl, deathMessage.get()));
+            return Optional.of(hold(deathQueueUrl, deathMessage.get()));
         }
         Optional<Message> standardMessage = poll(standardQueueUrl);
         if (standardMessage.isEmpty()) {
             return Optional.empty();
         }
-        return Optional.of(readAndDelete(standardQueueUrl, standardMessage.get()));
+        return Optional.of(hold(standardQueueUrl, standardMessage.get()));
+    }
+
+    @Override
+    public synchronized void acknowledge(ClaimQueuedMessage message) {
+        Objects.requireNonNull(message, "message");
+        if (inflightMessage == null) {
+            return;
+        }
+        if (!inflightMessage.equals(message)) {
+            throw new IllegalStateException("Claim queue message is not in flight");
+        }
+        delete(inflightQueueUrl, inflightReceiptHandle);
+        inflightMessage = null;
+        inflightQueueUrl = null;
+        inflightReceiptHandle = null;
     }
 
     private Optional<Message> poll(String queueUrl) {
@@ -84,9 +105,11 @@ public final class SqsClaimQueue implements ClaimQueuePort {
         }
     }
 
-    private ClaimQueuedMessage readAndDelete(String queueUrl, Message message) {
+    private ClaimQueuedMessage hold(String queueUrl, Message message) {
         ClaimQueuedMessage mapped = read(message);
-        delete(queueUrl, message);
+        inflightMessage = mapped;
+        inflightQueueUrl = queueUrl;
+        inflightReceiptHandle = message.receiptHandle();
         return mapped;
     }
 
@@ -99,11 +122,11 @@ public final class SqsClaimQueue implements ClaimQueuePort {
         }
     }
 
-    private void delete(String queueUrl, Message message) {
+    private void delete(String queueUrl, String receiptHandle) {
         try {
             sqsClient.deleteMessage(DeleteMessageRequest.builder()
                     .queueUrl(queueUrl)
-                    .receiptHandle(message.receiptHandle())
+                    .receiptHandle(receiptHandle)
                     .build());
         } catch (RuntimeException exception) {
             throw unavailable(exception);

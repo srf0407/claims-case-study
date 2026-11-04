@@ -11,6 +11,7 @@ import com.claimsprocessing.claims.application.port.in.ValidateClientCommand;
 import com.claimsprocessing.claims.application.port.in.ValidateClientUseCase;
 import com.claimsprocessing.claims.application.port.out.ClaimQueuePort;
 import com.claimsprocessing.claims.application.port.out.ClaimQueuedMessage;
+import com.claimsprocessing.claims.domain.IllegalClaimTransitionException;
 
 public final class ClaimWorkerService implements ClaimWorkerUseCase {
 
@@ -44,6 +45,17 @@ public final class ClaimWorkerService implements ClaimWorkerUseCase {
             return ClaimWorkerResult.QUEUE_EMPTY;
         }
         ClaimQueuedMessage message = received.orElseThrow();
+        try {
+            ClaimWorkerResult result = handle(message);
+            claimQueue.acknowledge(message);
+            return result;
+        } catch (IllegalStateException | IllegalClaimTransitionException | ClaimNotFoundException exception) {
+            claimQueue.acknowledge(message);
+            throw exception;
+        }
+    }
+
+    private ClaimWorkerResult handle(ClaimQueuedMessage message) {
         ClientCheckResult clientCheck = validateClient.validate(new ValidateClientCommand(message.claimId()));
         if (clientCheck != ClientCheckResult.KNOWN) {
             return ClaimWorkerResult.REJECTED;

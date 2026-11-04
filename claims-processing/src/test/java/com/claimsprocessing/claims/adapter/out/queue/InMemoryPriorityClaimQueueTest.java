@@ -51,6 +51,7 @@ class InMemoryPriorityClaimQueueTest {
 
         // when
         var firstReceived = queue.receive();
+        queue.acknowledge(firstReceived.orElseThrow());
         var secondReceived = queue.receive();
 
         // then
@@ -69,6 +70,7 @@ class InMemoryPriorityClaimQueueTest {
 
         // when
         var firstReceived = queue.receive();
+        queue.acknowledge(firstReceived.orElseThrow());
         var secondReceived = queue.receive();
 
         // then
@@ -85,6 +87,24 @@ class InMemoryPriorityClaimQueueTest {
         assertThatThrownBy(() -> queue.enqueue(null))
                 .isInstanceOf(NullPointerException.class)
                 .hasMessage("message");
+        assertThat(queue.receive()).isEmpty();
+    }
+
+    @Test
+    void should_return_the_same_message_until_it_is_acknowledged() {
+        // given
+        var queue = new InMemoryPriorityClaimQueue();
+        var funeral = message("11111111-1111-1111-1111-111111111111", ClaimType.FUNERAL);
+        queue.enqueue(funeral);
+
+        // when
+        var first = queue.receive();
+        var second = queue.receive();
+        queue.acknowledge(first.orElseThrow());
+
+        // then
+        assertThat(first).contains(funeral);
+        assertThat(second).contains(funeral);
         assertThat(queue.receive()).isEmpty();
     }
 

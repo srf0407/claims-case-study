@@ -109,7 +109,7 @@ class SqsClaimQueueTest {
     }
 
     @Test
-    void should_return_a_death_message_and_delete_it_without_reading_the_standard_queue() {
+    void should_return_a_death_message_without_reading_the_standard_queue_and_delete_it_on_acknowledge() {
         // given
         ClaimQueuedMessage message = new ClaimQueuedMessage(CLAIM_ID, ClaimType.DEATH);
         when(sqsClient.receiveMessage(any(ReceiveMessageRequest.class))).thenAnswer(invocation -> {
@@ -127,6 +127,8 @@ class SqsClaimQueueTest {
 
         // then
         assertThat(received).contains(message);
+        verify(sqsClient, never()).deleteMessage(any(DeleteMessageRequest.class));
+        queue.acknowledge(received.orElseThrow());
         ArgumentCaptor<ReceiveMessageRequest> polls = ArgumentCaptor.forClass(ReceiveMessageRequest.class);
         verify(sqsClient).receiveMessage(polls.capture());
         assertShortPoll(polls.getValue(), DEATH_URL);
@@ -138,7 +140,7 @@ class SqsClaimQueueTest {
     }
 
     @Test
-    void should_return_a_standard_message_and_delete_it_when_the_death_queue_is_empty() {
+    void should_return_a_standard_message_when_the_death_queue_is_empty_and_delete_it_on_acknowledge() {
         // given
         ClaimQueuedMessage message = new ClaimQueuedMessage(CLAIM_ID, ClaimType.FUNERAL);
         when(sqsClient.receiveMessage(any(ReceiveMessageRequest.class))).thenAnswer(invocation -> {
@@ -156,6 +158,8 @@ class SqsClaimQueueTest {
 
         // then
         assertThat(received).contains(message);
+        verify(sqsClient, never()).deleteMessage(any(DeleteMessageRequest.class));
+        queue.acknowledge(received.orElseThrow());
         InOrder order = inOrder(sqsClient);
         order.verify(sqsClient).receiveMessage(aRequest(request -> shortPoll(request, DEATH_URL)));
         order.verify(sqsClient).receiveMessage(aRequest(request -> shortPoll(request, STANDARD_URL)));
@@ -224,18 +228,21 @@ class SqsClaimQueueTest {
     }
 
     @Test
-    void should_throw_queue_unavailable_when_the_delete_fails() {
+    void should_throw_queue_unavailable_when_the_delete_fails_and_keep_the_message() {
         // given
         RuntimeException failure = new RuntimeException("delete-down");
         ClaimQueuedMessage message = new ClaimQueuedMessage(CLAIM_ID, ClaimType.DEATH);
         when(sqsClient.receiveMessage(any(ReceiveMessageRequest.class)))
                 .thenReturn(response(sqsMessage(mapper.toBody(message))));
         when(sqsClient.deleteMessage(any(DeleteMessageRequest.class))).thenThrow(failure);
+        var received = queue.receive();
 
         // when / then
-        assertThatThrownBy(queue::receive)
+        assertThatThrownBy(() -> queue.acknowledge(received.orElseThrow()))
                 .isInstanceOf(ClaimQueueUnavailableException.class)
                 .hasCause(failure);
+        assertThat(queue.receive()).contains(message);
+        verify(sqsClient).receiveMessage(any(ReceiveMessageRequest.class));
     }
 
     @ParameterizedTest

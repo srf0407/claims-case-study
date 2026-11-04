@@ -13,6 +13,7 @@ public final class InMemoryPriorityClaimQueue implements ClaimQueuePort {
 
     private final List<ClaimQueuedMessage> deathMessages = new ArrayList<>();
     private final List<ClaimQueuedMessage> normalMessages = new ArrayList<>();
+    private ClaimQueuedMessage inflight;
 
     @Override
     public synchronized void enqueue(ClaimQueuedMessage message) {
@@ -26,12 +27,29 @@ public final class InMemoryPriorityClaimQueue implements ClaimQueuePort {
 
     @Override
     public synchronized Optional<ClaimQueuedMessage> receive() {
+        if (inflight != null) {
+            return Optional.of(inflight);
+        }
         if (!deathMessages.isEmpty()) {
-            return Optional.of(deathMessages.removeFirst());
+            inflight = deathMessages.removeFirst();
+            return Optional.of(inflight);
         }
         if (!normalMessages.isEmpty()) {
-            return Optional.of(normalMessages.removeFirst());
+            inflight = normalMessages.removeFirst();
+            return Optional.of(inflight);
         }
         return Optional.empty();
+    }
+
+    @Override
+    public synchronized void acknowledge(ClaimQueuedMessage message) {
+        Objects.requireNonNull(message, "message");
+        if (inflight == null) {
+            return;
+        }
+        if (!inflight.equals(message)) {
+            throw new IllegalStateException("Claim queue message is not in flight");
+        }
+        inflight = null;
     }
 }
