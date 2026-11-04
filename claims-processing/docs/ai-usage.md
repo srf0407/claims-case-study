@@ -123,3 +123,26 @@ That pull request would go through the same gates as any other change: CI, ArchU
 
 What stays human is the architecture and the ADRs, anything that touches payment rules or a regulatory requirement, and the merge. No client or claim data goes into a prompt. The agent sees ids and error details, not personal information.
 
+## Task log
+
+The log below is part of this write-up. Follow-up pull requests must not add another AI log.
+
+| Task | Outcome | Notes |
+|---|---|---|
+| Claim intake endpoint | Accepted | POST /claims returns 201 and the new id. Invalid claims are 400 and are not queued. |
+| Claim status endpoint | Accepted | GET /claims/{id} returns the stored claim. An unknown id is 404 and a non-UUID id is 400. |
+| Payment status callback | Accepted | POST /payments/callback checks the HMAC signature and applies the payment status. Queueing the callback is deferred. |
+| Reject incomplete payment callbacks | Accepted | A signed callback missing claimId, outcome, or idempotencyKey, or with an unknown outcome, returns 400 and does not call the use case. |
+| Error handling and validation responses | Accepted | Web errors return a ProblemDetail body. An unexpected failure is a generic 500 and is logged. |
+| Remove ArchUnit empty-layer allowances | Accepted | withOptionalLayers and failOnEmptyShould are removed. Each layer already has classes, and the dependency rules are unchanged. |
+| Death-claim SLA warning and breach alarms | Accepted | Scheduled scan emits one warning and one breach through a logging port. CloudWatch stays the production option. |
+| Claim.restore for a stored claim | Accepted | Restores the id, fields, status, reason, and events. Rejects a null id, a null status, a null or empty event list, and the same field and rejection-reason rules as accept. |
+| LocalStack SQS and DynamoDB adapters | Accepted | Profile localstack switches on the SQS queue and DynamoDB repository. In-memory stays the default. A poison message, including an unknown claim type, is logged at WARN with the message id and is not deleted. |
+| DynamoDB open death claims | Accepted | findOpenDeathClaims scans for DEATH claims in ACCEPTED or AWAITING_ANALYST and follows the page token. |
+| LocalStack profile startup | Accepted | The localstack profile registers its settings bean, and Compose marks the init script executable before LocalStack starts. |
+| Wire the claim-flow use cases and straight-through limit | Accepted | ClaimFlowConfig beans, limit default 10000.00, poll interval default PT5S. The context test binds that limit and a PT24H interval. The death-claim SLA scheduler waits for its check interval before the first run, and LocalStackConfigTest sets that interval to PT24H. |
+| Schedule the claim worker | Accepted | Each tick drains until the queue is empty or 10 messages, and a process failure is logged at ERROR and ends that tick. The first tick waits for claims.worker.poll-interval. Context tests set that interval to PT24H. |
+| Analyst decision endpoint | Accepted | POST /claims/{id}/decision. Approve moves an awaiting claim to APPROVED and starts payment; reject stores ANALYST_REJECTED. A claim that is not awaiting an analyst is 409. No auth in this sample. |
+| End-to-end claim flow | Accepted | ClaimFlowEndToEndTest submits through one WireMock. An eligible funeral claim is paid after the worker and a signed callback. A death claim waits for an analyst, and an unknown client is rejected. A death claim is processed before an earlier funeral claim. |
+| Callback secret from the environment | Accepted | application.yml requires PAYMENT_CALLBACK_SECRET and has no default. A null secret fails in the properties constructor with that name, and a blank secret fails with "PAYMENT_CALLBACK_SECRET must be set". Tests set dev-callback-secret in src/test/resources/application.properties so the main application.yml still loads. |
+

@@ -64,10 +64,10 @@ Show: files changed (one line each), verify result, the review report, and quest
 - which review findings to act on,
 - whether to start the next slice, or, once the last slice is approved, whether to tick the item off in `docs/backlog.md`.
 
-Do not add a task log or new rows to `docs/ai-usage.md`. That write-up is finished. Later pull requests must not append an AI log.
+Do not add an AI log to a follow-up pull request. The task log in `docs/ai-usage.md` stays in the case-study write-up.
 
 STOP.
 
 ## Needs explicit approval every time
-Commits, pushes, PRs, new dependencies, edits to `docs/` or ADRs, ticking `docs/backlog.md`. Do not append an AI log to `docs/ai-usage.md`. Answers
+Commits, pushes, PRs, new dependencies, edits to `docs/` or ADRs, ticking `docs/backlog.md`. Do not add an AI log to a follow-up pull request. Answers
 to questions go into `docs/` or an ADR only after the developer agrees on the wording.
