@@ -30,9 +30,17 @@ public final class PaymentCallbackMapper {
         }
         requireText(request.idempotencyKey(), "idempotencyKey");
         return new ApplyPaymentStatusCommand(
-                new ClaimId(UUID.fromString(request.claimId())),
+                new ClaimId(parseClaimId(request.claimId())),
                 request.outcome(),
                 request.idempotencyKey());
+    }
+
+    private static UUID parseClaimId(String claimId) {
+        try {
+            return UUID.fromString(claimId);
+        } catch (IllegalArgumentException exception) {
+            throw new IllegalArgumentException("claimId uuid", exception);
+        }
     }
 
     private static void requireText(String value, String name) {

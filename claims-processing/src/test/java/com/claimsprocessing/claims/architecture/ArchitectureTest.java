@@ -25,8 +25,6 @@ class ArchitectureTest {
     @ArchTest
     static final ArchRule layers_follow_the_dependency_rule = layeredArchitecture()
             .consideringOnlyDependenciesInLayers()
-            // Remove withOptionalLayers(true) once each layer has classes.
-            .withOptionalLayers(true)
             .layer(CONFIG).definedBy("com.claimsprocessing.claims.config..")
             .layer(ADAPTER).definedBy("com.claimsprocessing.claims.adapter..")
             .layer(APPLICATION).definedBy("com.claimsprocessing.claims.application..")

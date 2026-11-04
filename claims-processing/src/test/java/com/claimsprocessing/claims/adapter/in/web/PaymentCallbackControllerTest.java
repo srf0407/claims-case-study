@@ -1,9 +1,10 @@
 package com.claimsprocessing.claims.adapter.in.web;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -22,8 +23,12 @@ import com.claimsprocessing.claims.application.port.in.GetClaimUseCase;
 import com.claimsprocessing.claims.application.port.in.SubmitClaimCommand;
 import com.claimsprocessing.claims.application.port.in.SubmitClaimUseCase;
 import com.claimsprocessing.claims.domain.ClaimId;
-import jakarta.servlet.ServletException;
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import org.junit.jupiter.api.Test;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.MediaType;
 import org.springframework.http.converter.json.JacksonJsonHttpMessageConverter;
 import org.springframework.test.web.servlet.MockMvc;
@@ -83,7 +88,7 @@ class PaymentCallbackControllerTest {
         ResultActions actions = performCallback(mockMvc, callbackBody(CLAIM_ID, CLAIM_ID), null);
 
         // then
-        actions.andExpect(status().isUnauthorized());
+        expectInvalidSignature(actions);
         assertThat(useCase.calls).isZero();
     }
 
@@ -98,7 +103,7 @@ class PaymentCallbackControllerTest {
         ResultActions actions = performCallback(mockMvc, body, sign(body, "other-secret"));
 
         // then
-        actions.andExpect(status().isUnauthorized());
+        expectInvalidSignature(actions);
         assertThat(useCase.calls).isZero();
     }
 
@@ -112,7 +117,7 @@ class PaymentCallbackControllerTest {
         ResultActions actions = performCallback(mockMvc, "{".getBytes(StandardCharsets.UTF_8), null);
 
         // then
-        actions.andExpect(status().isUnauthorized());
+        expectInvalidSignature(actions);
         assertThat(useCase.calls).isZero();
     }
 
@@ -129,7 +134,7 @@ class PaymentCallbackControllerTest {
         ResultActions actions = performCallback(mockMvc, body, sign(body));
 
         // then
-        actions.andExpect(status().isBadRequest());
+        expectInvalidCallback(actions, "claimId is required");
         assertThat(useCase.calls).isZero();
     }
 
@@ -146,7 +151,7 @@ class PaymentCallbackControllerTest {
         ResultActions actions = performCallback(mockMvc, body, sign(body));
 
         // then
-        actions.andExpect(status().isBadRequest());
+        expectInvalidCallback(actions, "outcome is required");
         assertThat(useCase.calls).isZero();
     }
 
@@ -163,7 +168,7 @@ class PaymentCallbackControllerTest {
         ResultActions actions = performCallback(mockMvc, body, sign(body));
 
         // then
-        actions.andExpect(status().isBadRequest());
+        expectInvalidCallback(actions, "idempotencyKey is required");
         assertThat(useCase.calls).isZero();
     }
 
@@ -180,7 +185,7 @@ class PaymentCallbackControllerTest {
         ResultActions actions = performCallback(mockMvc, body, sign(body));
 
         // then
-        actions.andExpect(status().isBadRequest());
+        expectUnreadableCallback(actions);
         assertThat(useCase.calls).isZero();
     }
 
@@ -195,14 +200,15 @@ class PaymentCallbackControllerTest {
         ResultActions actions = performCallback(mockMvc, body, sign(body));
 
         // then
-        actions.andExpect(status().isBadRequest());
+        expectUnreadableCallback(actions);
         assertThat(useCase.calls).isZero();
     }
 
     @Test
     void should_return_400_when_the_idempotency_key_does_not_match() throws Exception {
         // given
-        FakeApplyPaymentStatus useCase = new FakeApplyPaymentStatus(new IllegalArgumentException("idempotencyKey"));
+        FakeApplyPaymentStatus useCase = new FakeApplyPaymentStatus(
+                new IllegalArgumentException("idempotencyKey mismatch"));
         MockMvc mockMvc = callbackMvc(useCase);
         byte[] body = callbackBody(CLAIM_ID, "other-key");
 
@@ -210,7 +216,7 @@ class PaymentCallbackControllerTest {
         ResultActions actions = performCallback(mockMvc, body, sign(body));
 
         // then
-        actions.andExpect(status().isBadRequest());
+        expectInvalidCallback(actions, "idempotencyKey does not match the claim");
     }
 
     @Test
@@ -224,8 +230,24 @@ class PaymentCallbackControllerTest {
         ResultActions actions = performCallback(mockMvc, body, sign(body));
 
         // then
-        actions.andExpect(status().isBadRequest());
+        expectInvalidCallback(actions, "claimId must be a UUID");
+        assertThat(actions.andReturn().getResponse().getContentAsString()).doesNotContain("Invalid UUID string");
         assertThat(useCase.calls).isZero();
+    }
+
+    @Test
+    void should_return_400_when_the_callback_argument_is_unrecognised() throws Exception {
+        // given
+        FakeApplyPaymentStatus useCase = new FakeApplyPaymentStatus(new IllegalArgumentException("secret-detail"));
+        MockMvc mockMvc = callbackMvc(useCase);
+        byte[] body = callbackBody(CLAIM_ID, CLAIM_ID);
+
+        // when
+        ResultActions actions = performCallback(mockMvc, body, sign(body));
+
+        // then
+        expectInvalidCallback(actions, "Request body could not be read");
+        assertThat(actions.andReturn().getResponse().getContentAsString()).doesNotContain("secret-detail");
     }
 
     @Test
@@ -239,7 +261,14 @@ class PaymentCallbackControllerTest {
         ResultActions actions = performCallback(mockMvc, body, sign(body));
 
         // then
-        actions.andExpect(status().isConflict());
+        expectProblem(
+                actions,
+                409,
+                "/problems/payment-conflict",
+                "Payment conflict",
+                "Claim is not awaiting payment",
+                "/payments/callback");
+        assertThat(actions.andReturn().getResponse().getContentAsString()).doesNotContain("ACCEPTED");
     }
 
     @Test
@@ -254,11 +283,18 @@ class PaymentCallbackControllerTest {
         ResultActions actions = performCallback(mockMvc, body, sign(body));
 
         // then
-        actions.andExpect(status().isNotFound());
+        expectProblem(
+                actions,
+                404,
+                "/problems/claim-not-found",
+                "Claim not found",
+                "Claim not found",
+                "/payments/callback");
     }
 
     @Test
-    void should_not_turn_a_get_illegal_state_into_409() {
+    void should_not_turn_a_get_illegal_state_into_409() throws Exception {
+        // given
         GetClaimUseCase getClaim = query -> {
             throw new IllegalStateException("Claim is ACCEPTED");
         };
@@ -270,10 +306,179 @@ class PaymentCallbackControllerTest {
                 .setMessageConverters(new JacksonJsonHttpMessageConverter())
                 .build();
 
-        assertThatThrownBy(() -> mockMvc.perform(get("/claims/" + CLAIM_ID)))
-                .isInstanceOf(ServletException.class)
-                .cause()
-                .isInstanceOf(IllegalStateException.class);
+        // when
+        ResultActions actions = mockMvc.perform(get("/claims/" + CLAIM_ID));
+
+        // then
+        expectProblem(
+                actions,
+                500,
+                "/problems/internal-error",
+                "Internal error",
+                "An unexpected error occurred",
+                "/claims/" + CLAIM_ID);
+        assertThat(actions.andReturn().getResponse().getContentAsString())
+                .doesNotContain("ACCEPTED")
+                .doesNotContain("IllegalStateException");
+    }
+
+    @Test
+    void should_return_404_for_an_unknown_path() throws Exception {
+        // given
+        MockMvc mockMvc = bothControllers();
+        ListAppender<ILoggingEvent> logs = attachHandlerLog();
+
+        // when
+        ResultActions actions;
+        try {
+            actions = mockMvc.perform(get("/nope"));
+        } finally {
+            detachHandlerLog(logs);
+        }
+
+        // then
+        expectProblem(
+                actions,
+                404,
+                "/problems/request-error",
+                "Not Found",
+                "Request could not be handled",
+                "/nope");
+        assertThat(actions.andReturn().getResponse().getContentAsString()).doesNotContain("NoResourceFoundException");
+        assertThat(logs.list).extracting(ILoggingEvent::getLevel).doesNotContain(Level.ERROR);
+    }
+
+    @Test
+    void should_return_405_for_a_wrong_method() throws Exception {
+        // given
+        MockMvc mockMvc = bothControllers();
+        ListAppender<ILoggingEvent> logs = attachHandlerLog();
+
+        // when
+        ResultActions actions;
+        try {
+            actions = mockMvc.perform(delete("/claims"));
+        } finally {
+            detachHandlerLog(logs);
+        }
+
+        // then
+        expectProblem(
+                actions,
+                405,
+                "/problems/request-error",
+                "Method Not Allowed",
+                "Request could not be handled",
+                "/claims");
+        assertThat(actions.andReturn().getResponse().getContentAsString())
+                .doesNotContain("HttpRequestMethodNotSupportedException");
+        assertThat(logs.list).extracting(ILoggingEvent::getLevel).doesNotContain(Level.ERROR);
+    }
+
+    @Test
+    void should_return_500_when_the_callback_fails_unexpectedly() throws Exception {
+        // given
+        FakeApplyPaymentStatus useCase = new FakeApplyPaymentStatus(new RuntimeException("secret-marker"));
+        MockMvc mockMvc = callbackMvc(useCase);
+        byte[] body = callbackBody(CLAIM_ID, CLAIM_ID);
+
+        // when
+        ResultActions actions = performCallback(mockMvc, body, sign(body));
+
+        // then
+        expectProblem(
+                actions,
+                500,
+                "/problems/internal-error",
+                "Internal error",
+                "An unexpected error occurred",
+                "/payments/callback");
+        assertThat(actions.andReturn().getResponse().getContentAsString())
+                .doesNotContain("secret-marker")
+                .doesNotContain("RuntimeException");
+    }
+
+    @Test
+    void should_accept_a_callback_that_includes_an_unknown_json_property() throws Exception {
+        // given
+        FakeApplyPaymentStatus useCase = new FakeApplyPaymentStatus(PaymentStatusResult.APPLIED);
+        MockMvc mockMvc = callbackMvc(useCase);
+        byte[] body = """
+                {"claimId":"%s","outcome":"PAID","idempotencyKey":"%s","note":"ignore-me"}
+                """.formatted(CLAIM_ID, CLAIM_ID).trim().getBytes(StandardCharsets.UTF_8);
+
+        // when
+        ResultActions actions = performCallback(mockMvc, body, sign(body));
+
+        // then
+        actions.andExpect(status().isOk())
+                .andExpect(jsonPath("$.result").value("APPLIED"));
+        assertThat(useCase.command).isEqualTo(new ApplyPaymentStatusCommand(
+                new ClaimId(UUID.fromString(CLAIM_ID)),
+                com.claimsprocessing.claims.application.port.in.PaymentOutcome.PAID,
+                CLAIM_ID));
+    }
+
+    private static void expectInvalidSignature(ResultActions actions) throws Exception {
+        expectProblem(
+                actions,
+                401,
+                "/problems/invalid-signature",
+                "Invalid signature",
+                "Payment signature is invalid",
+                "/payments/callback");
+    }
+
+    private static void expectInvalidCallback(ResultActions actions, String detail) throws Exception {
+        expectProblem(
+                actions,
+                400,
+                "/problems/invalid-callback",
+                "Invalid callback",
+                detail,
+                "/payments/callback");
+    }
+
+    private static void expectUnreadableCallback(ResultActions actions) throws Exception {
+        expectInvalidCallback(actions, "Request body could not be read");
+        assertThat(actions.andReturn().getResponse().getContentAsString()).doesNotContain("Jackson");
+    }
+
+    private static void expectProblem(
+            ResultActions actions, int status, String type, String title, String detail, String instance)
+            throws Exception {
+        actions.andExpect(status().is(status))
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.type").value(type))
+                .andExpect(jsonPath("$.title").value(title))
+                .andExpect(jsonPath("$.status").value(status))
+                .andExpect(jsonPath("$.detail").value(detail))
+                .andExpect(jsonPath("$.instance").value(instance));
+    }
+
+    private MockMvc bothControllers() {
+        return MockMvcBuilders.standaloneSetup(
+                        new ClaimController(
+                                unusedSubmit(), new SubmitClaimMapper(), query -> {
+                                    throw new UnsupportedOperationException("get");
+                                }, new GetClaimMapper()),
+                        callbackController(new FakeApplyPaymentStatus(PaymentStatusResult.APPLIED)))
+                .setControllerAdvice(new ClaimExceptionHandler(), new PaymentCallbackExceptionHandler())
+                .setMessageConverters(new JacksonJsonHttpMessageConverter())
+                .build();
+    }
+
+    private static ListAppender<ILoggingEvent> attachHandlerLog() {
+        Logger logger = (Logger) LoggerFactory.getLogger(ClaimExceptionHandler.class);
+        ListAppender<ILoggingEvent> appender = new ListAppender<>();
+        appender.start();
+        logger.addAppender(appender);
+        return appender;
+    }
+
+    private static void detachHandlerLog(ListAppender<ILoggingEvent> appender) {
+        Logger logger = (Logger) LoggerFactory.getLogger(ClaimExceptionHandler.class);
+        logger.detachAppender(appender);
     }
 
     private MockMvc callbackMvc(ApplyPaymentStatusUseCase useCase) {

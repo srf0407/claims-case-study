@@ -22,7 +22,7 @@ public final class PaymentSignatureVerifier {
             this.mac = Mac.getInstance(HMAC_SHA256);
             this.mac.init(new SecretKeySpec(key, HMAC_SHA256));
         } catch (GeneralSecurityException exception) {
-            throw new IllegalStateException(HMAC_SHA256, exception);
+            throw new MacUnavailableException(exception);
         }
     }
 
@@ -52,5 +52,12 @@ public final class PaymentSignatureVerifier {
             decoded[index / 2] = (byte) ((high << 4) + low);
         }
         return decoded;
+    }
+
+    private static final class MacUnavailableException extends RuntimeException {
+
+        private MacUnavailableException(GeneralSecurityException cause) {
+            super(HMAC_SHA256, cause);
+        }
     }
 }
