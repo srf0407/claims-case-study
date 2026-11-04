@@ -2,107 +2,247 @@
 
 ## Description
 
-Placeholder. Written under the "Solution description" backlog item.
+`claims-processing` is the Claims System API. A web form submits a claim as JSON. This repo has no Claims System UI. The service owns input checks, the claim lifecycle, the order of the steps, failure handling, and death-claim priority. Client rules stay in the Client Registry. Policy rules stay in the Policy Manager.
 
-## Recommended changes
+`POST /claims` validates the body, stores the claim as `ACCEPTED`, and enqueues it. A death claim goes on the death queue. Every other claim goes on the standard queue. A scheduled worker polls the death queue first. It checks the client, then the policy. When both checks pass, a claim that is not a death claim, is not flagged, and whose amount is strictly under `claims.straight-through.limit` (default `10000.00`) starts payment. The worker passes `flagged` as false. Any other claim that passed both checks becomes `AWAITING_ANALYST`. An analyst approves or rejects it with `POST /claims/{id}/decision`. Approve moves the claim to `APPROVED` and initiates payment. Payment is `POST /payments` with the header `Idempotency-Key` set to the claim id. The Payment System later calls `POST /payments/callback` with an HMAC-SHA256 signature. The endpoint checks the signature and applies the outcome in that request: `PAID` sets the claim to `PAID`, and `FAILED` sets it to `PAYMENT_FAILED`. A scheduled check can raise a death-claim SLA warning or breach. The clock runs from accept while the claim is `ACCEPTED` or `AWAITING_ANALYST`.
 
-Placeholder. Written under the "Recommended changes to existing systems" backlog item.
+The fields are `clientId`, `policyNumber`, `claimType` (`DEATH`, `DISABILITY`, or `FUNERAL`), `amount`, and `incidentDate`. A death claim also includes `dateOfDeath` and `deathCertificateRef`. A body that fails validation is HTTP 400 and is never queued. `GET /claims/{id}` returns the stored claim.
 
-## Scope
+See the [context diagram](diagrams/context.md), the [claim states](diagrams/state-claim.md), [ADR-0001](adr/0001-single-service-outbound-ports.md), [ADR-0002](adr/0002-async-https-payment-webhook.md), [ADR-0003](adr/0003-prioritise-death-claims-separate-queue.md), and [ADR-0004](adr/0004-death-claim-sla-alarms-through-an-outbound-port.md).
 
-`claims-service` is the Claims System API. The Claims System exists and is not connected to the other systems, so this service builds that orchestration end to end. It owns input checks, the claim lifecycle, step order, failure handling, and death-claim priority.
+On AWS this maps to one service on ECS Fargate behind API Gateway, SQS (`claims-death`, `claims-standard`, and `claims-dlq`), DynamoDB table `claims`, CloudWatch alarms, and Secrets Manager. This sample reads the callback secret from `PAYMENT_CALLBACK_SECRET` and logs the SLA alarm. Profile `localstack` uses LocalStack for SQS and DynamoDB. The default profile keeps the queue and the claim repository in memory.
 
-The Claims System UI is out of scope. This repo has no frontend.
+## Architecture
 
-Client rules stay in the Client Registry. Policy, plan, and benefit rules stay in the Policy Manager. This service calls those systems and acts on the result. Portfolio information is read for context only and does not drive the pay-or-not decision.
+The service is one deployable with four layers. `domain` holds the claim, its statuses, and the transition rules, and it is plain Java. `application` holds the use cases and the ports, and it depends only on `domain`. `adapter` implements the ports: HTTP in, the worker and SLA schedulers, and the clients for the Client Registry, Policy Manager, Payment, the queue, claim storage, and the SLA alarm. `config` constructs the beans. Dependencies point inward. [ADR-0001](adr/0001-single-service-outbound-ports.md) records this shape. `ArchitectureTest` fails the build if a layer depends outward, if `domain` or `application` uses Spring, if one adapter depends on another, or if a field is injected with `@Autowired`.
 
-The only intake channel in this exercise is the web form. The sample does not implement the Client Registry, the Policy Manager, or the Payment System. Those stay external and are mocked with WireMock in tests.
+## How the systems interact
 
-### What the API accepts
+These sequences are what the code does. With profile `localstack`, the death queue is SQS `claims-death`, the standard queue is SQS `claims-standard`, and claims are stored in DynamoDB table `claims`. The default profile uses an in-memory queue and an in-memory repository. The steps are the same.
 
-The channel submits a claim as JSON. The minimum fields are:
+### Straight-through claim to PAID
 
-- `clientId`
-- `policyNumber`
-- `claimType`, including `DEATH`
-- `amount`
-- `incidentDate`
+```mermaid
+sequenceDiagram
+  participant Form as Web form
+  participant API as claims-processing
+  participant Queue as Claim queue
+  participant Registry as Client Registry
+  participant Policy as Policy Manager
+  participant Payment as Payment System
 
-The sample claim types are DEATH, DISABILITY, and FUNERAL. The list is illustrative and would come from the business. Only DEATH has special rules (ADR-0003).
+  Form->>API: POST /claims FUNERAL, C-1, P-1, 150.00
+  API->>API: Save ACCEPTED
+  API->>Queue: Enqueue on the standard queue
+  API-->>Form: 201 claimId
+  API->>Queue: Poll the death queue, then receive and delete
+  API->>Registry: GET /clients/C-1
+  Registry-->>API: 200 ACTIVE
+  API->>Policy: GET /policies/P-1/cover?claimType=FUNERAL
+  Policy-->>API: 200 ACTIVE, covered true
+  Note over API: Not a death claim, not flagged, amount under the limit
+  API->>Payment: POST /payments, Idempotency-Key = claim id
+  Payment-->>API: 202
+  API->>API: Save PAYMENT_PENDING
+  Payment->>API: POST /payments/callback, X-Payment-Signature, outcome PAID
+  API->>API: Signature matches, save PAID
+  API-->>Payment: 200 APPLIED
+```
 
-A death claim also includes `dateOfDeath` and `deathCertificateRef`.
+The payment body is `claimId`, `clientId`, `policyNumber`, and `amount`. The client also treats HTTP 409 from `POST /payments` as accepted. The callback key is the claim id.
 
-Payee bank details come from the Client Registry, not the form.
+### Death claim to PAYMENT_PENDING
 
-Input that fails validation gets HTTP 400 and is never queued.
+```mermaid
+sequenceDiagram
+  participant Form as Web form
+  participant API as claims-processing
+  participant Queue as Claim queue
+  participant Registry as Client Registry
+  participant Policy as Policy Manager
+  participant Payment as Payment System
+  participant Analyst as Analyst
 
-`GET /claims/{id}` returns the claim for the channel (status) and for the analyst.
+  Form->>API: POST /claims DEATH, dateOfDeath, deathCertificateRef
+  API->>API: Save ACCEPTED
+  API->>Queue: Enqueue on the death queue
+  API-->>Form: 201 claimId
+  API->>Queue: Receive the death queue first and delete
+  API->>Registry: GET /clients/C-1
+  Registry-->>API: 200 ACTIVE
+  API->>Policy: GET /policies/P-1/cover?claimType=DEATH
+  Policy-->>API: 200 ACTIVE, covered true
+  API->>API: Save AWAITING_ANALYST
+  Note over Analyst,API: The Claims System UI is not in this repo. This is the call it would make.
+  Analyst->>API: POST /claims/{id}/decision, decision APPROVE
+  API->>API: Save APPROVED
+  API->>Payment: POST /payments, Idempotency-Key = claim id
+  Payment-->>API: 202
+  API->>API: Save PAYMENT_PENDING
+  API-->>Analyst: 200 PAYMENT_PENDING
+```
 
-### How a claim is processed
+`PAID` follows the same callback as the straight-through claim.
 
-Death claims never use straight-through processing. For every other claim, when the client check and the policy check both pass, and the amount is under a set limit, payment starts automatically.
+### Rejection
 
-The straight-through limit is a `BigDecimal` constructor argument on the straight-through use case. Payment starts only when the amount is strictly under that limit. The illustrative default is 10000.00.
+```mermaid
+sequenceDiagram
+  participant API as claims-processing
+  participant Queue as Claim queue
+  participant Registry as Client Registry
+  participant Policy as Policy Manager
 
-A high amount, or a flag, sends the claim to an analyst queue.
+  API->>Queue: Receive and delete
+  alt Unknown client
+    API->>Registry: GET /clients/C-404
+    Registry-->>API: 404
+    API->>API: Save REJECTED, UNKNOWN_CLIENT
+  else Lapsed policy
+    API->>Registry: GET /clients/C-1
+    Registry-->>API: 200 ACTIVE
+    API->>Policy: GET /policies/P-LAPSED/cover
+    Policy-->>API: 200 LAPSED
+    API->>API: Save REJECTED, POLICY_LAPSED
+  end
+```
 
-A death claim uses a priority queue for its client and policy checks, its analyst handoff, and its payment-status update. The worker drains that queue before the normal queue. The SLA is 4 clock hours from accept (`POST /claims`) until the analyst decision, or until the claim is rejected with no analyst decision. The duration is an assumption pending business confirmation and is a config value (default 4 hours). A warning alarm fires at 75% of the duration (3 hours at the default). A death-claim message that exhausts its retries goes to the dead-letter queue and is flagged to the priority analyst queue, and the SLA clock keeps running. Recorded in ADR-0003.
+Policy Manager HTTP 404, or HTTP 200 with status `ACTIVE` and `covered` false, is `NO_COVER`. These rejections are not retried. An unknown client does not call the Policy Manager.
 
-A queued claim is approved or rejected in the Claims System UI. The UI calls claims-service, and on approval claims-service initiates payment.
+### Failure, redrive, and a duplicate callback
 
-Business rejection (unknown client, lapsed policy, no cover) is not retried. The claim is rejected, or sent to an analyst when the case is borderline.
+```mermaid
+sequenceDiagram
+  participant API as claims-processing
+  participant Queue as Claim queue
+  participant Down as Downstream HTTP
+  participant DLQ as claims-dlq
 
-A temporary failure (the system is down, the call times out, or the response is 503) gets 4 receives: the first attempt plus 3 retries, with backoff 1s, 2s, 4s. On SQS, `maxReceiveCount` is 4. After retries are exhausted the message goes to a dead-letter queue and the claim is flagged for an analyst.
+  alt Downstream call unavailable
+    API->>Queue: Receive and delete
+    Note over Queue: The in-memory queue removes the message here and has no DLQ.
+    API->>Down: Client, policy, or payment call
+    Down-->>API: Timeout or other unexpected status
+    Note over API: Claim stays ACCEPTED. Log "Claim worker failed" and stop the tick.
+  else Unreadable SQS body
+    API->>Queue: Receive
+    Queue-->>API: Body cannot be read
+    Note over API,Queue: Message is not deleted. WARN "Poison claim message". Log "Claim worker failed" and stop the tick.
+    Queue->>DLQ: After 4 receives, visibility 30s
+    Note over DLQ: Nothing reads claims-dlq. The claim is not flagged.
+  end
+```
 
-A payment request carries an idempotency key. The Payment System reports status later by a signed HTTPS webhook to the payment-status endpoint (API Gateway in the AWS mapping). The endpoint queues the status and returns 200 once the message is queued. A worker then updates the claim. Payment retries the webhook if this service is down. Payment echoes the idempotency key, and a repeat delivery with the same key does not change the claim again. Recorded in ADR-0002.
+If payment initiate fails after `APPROVE`, the claim stays `APPROVED`.
 
-Client Registry and Policy Manager calls are synchronous HTTP from a queue worker. A temporary failure retries that message, as described above.
+```mermaid
+sequenceDiagram
+  participant Payment as Payment System
+  participant API as claims-processing
 
-### Boundaries the later tickets implement
+  Payment->>API: POST /payments/callback, same outcome, same idempotency key
+  API-->>Payment: 200 DUPLICATE
+  Note over API: Status unchanged
+```
 
-No types are added in this document. The later code tickets add:
+#### Target, not implemented (ADR-0002)
 
-- inbound: submit a claim, get claim status, receive a payment status
-- outbound: Client Registry, Policy Manager, Payment System (idempotency key on the payment request), claim storage, and queues
+```mermaid
+sequenceDiagram
+  participant API as claims-processing
+  participant Queue as Claim queue
+  participant Down as Downstream HTTP
+  participant DLQ as claims-dlq
 
-Queues and storage are behind ports. Sample code keeps them in memory.
+  API->>Queue: Receive and leave the message
+  API->>Down: Client, policy, or payment call
+  alt Call fails
+    Down-->>API: Unavailable
+    Note over Queue: Backoff 1s, then 2s, then 4s. Four receives.
+    Queue->>DLQ: claims-dlq after the fourth receive
+    Note over API: Flag the claim for an analyst
+  else Call succeeds
+    Down-->>API: Ok
+    API->>Queue: Delete
+  end
+```
 
-### Out of scope
+### Death-certificate upload (proposed, not implemented)
 
-- The Claims System UI and any other frontend
-- Channels other than the web form
-- Authentication of claimants, analysts, and the channel
-- Partial payments
-- AWS calls and LocalStack, unless the optional LocalStack backlog item is started
+```mermaid
+sequenceDiagram
+  participant FE as Frontend
+  participant API as Claims API
+  participant S3 as S3
+  participant Scan as Malware scan
+  participant DB as DynamoDB
+  participant Analyst as Analyst
+
+  Note over FE,Analyst: Proposed. Not implemented.
+  FE->>API: POST /claims/{id}/documents, content type and size
+  API->>API: Claim exists and is a death claim
+  API-->>FE: Presigned POST, about 5 minutes
+  FE->>S3: Upload to claims/claimId/documents/documentId
+  S3->>Scan: Object event via EventBridge or SQS
+  Note over Scan: GuardDuty Malware Protection for S3
+  Scan-->>API: Scan result
+  API->>DB: Store claimId, documentId, type, SHA-256, scan status
+  Note over DB: Available only when the file is clean
+  Analyst->>API: Open the certificate
+  API-->>Analyst: Short-lived presigned download, analyst role only
+  Note over API: Approval waits for a clean certificate
+```
+
+The presigned POST is locked to `claims/{claimId}/documents/{documentId}`, allows PDF, JPEG, or PNG, and limits the object to about 10 MB. The browser uploads to S3, so the service never handles the file. The bucket is private, with Block Public Access, SSE-KMS, versioning, Object Lock for the retention period, a lifecycle rule to Glacier, and CloudTrail data events. The object is sensitive personal data (POPIA). In this design the S3 adapter would implement a new outbound port, `DocumentStore`. LocalStack Community can serve S3 and presigned URLs, so this could be tested locally by adding `s3` to `SERVICES`; the current Compose file only enables `sqs` and `dynamodb`.
+
+### Reliability
+
+- The idempotency key is the claim id. Initiate sends it as `Idempotency-Key`, and the callback must echo it. The same outcome again is `DUPLICATE` and does not write the claim. A key that is not the claim id is HTTP 400. A callback for a claim that is not `PAYMENT_PENDING`, and is not already in that outcome's status, is HTTP 409.
+- The callback signature is HMAC-SHA256 of the raw body, in the header `X-Payment-Signature`. The sample reads the key from `PAYMENT_CALLBACK_SECRET`. A bad signature is HTTP 401 and is not applied. Secrets Manager is the AWS mapping for that secret.
+- The Client Registry, Policy Manager, and Payment clients use a connect timeout of 2s and a read timeout of 5s.
+- `init-aws.sh` creates `claims-dlq` and sets `maxReceiveCount` to 4 and visibility to 30 seconds on `claims-death` and `claims-standard`. A body that can be read is deleted before the outbound call, so a downstream failure does not use that redrive.
+- The death-claim SLA is `claims.death-sla.duration` (`PT4H`) from accept, with a warning at `warning-fraction` `0.75`, checked every `check-interval` (`PT1M`). The clock runs only while the claim is `ACCEPTED` or `AWAITING_ANALYST`. The sample logs a warning at WARN and a breach at ERROR, with the claim id and the elapsed time. CloudWatch is the AWS mapping. The set of alarms already raised is in memory, so a restart can raise the same alarm again.
+- Backoff timing, analyst flagging after the DLQ, a claim left `APPROVED`, and what happens after `PAYMENT_FAILED` are still open. The table below is the full list.
 
 ## Assumptions
 
-- Queues and claim storage sit behind ports. Implementations in this sample are in memory.
-- Ideal production design: full event sourcing (state rebuilt from the claim's events, stored in an event store, published as claim events, for example to EventBridge). Payment status still uses the webhook per ADR-0002. This case study keeps a small in-memory event history on the Claim as a step towards it.
-- The design maps the running system to AWS: API Gateway, ECS Fargate, SQS (a normal queue, a death-claim priority queue, and a dead-letter queue), DynamoDB, CloudWatch SLA alarms, and Secrets Manager. Payment status uses neither EventBridge nor SNS.
-- The Payment System is assumed external, based on its 'Third Party' label in the case-study context diagram. It therefore reports status through an HTTPS webhook, not our internal event bus. The brief does not confirm this.
-- LocalStack SQS is an optional profile, added only if that backlog item is picked up.
-- Authentication of claimants, analysts, and the channel is out of scope for the sample. The payment webhook signature is in scope and is recorded in ADR-0002.
-- Partial payments are out of scope for the sample.
-- External systems are reached only through outbound ports and mocked with WireMock in tests.
+- Queues and claim storage sit behind ports. The default profile is in memory. Profile `localstack` uses SQS and DynamoDB.
+- The ideal design is event sourcing: rebuild the claim from its events and publish those events. This sample stores a short event list on the claim, including on the DynamoDB item. Payment status stays the webhook from ADR-0002.
+- The running system maps to API Gateway, ECS Fargate, SQS (`claims-death`, `claims-standard`, `claims-dlq`), DynamoDB, CloudWatch alarms, and Secrets Manager. Payment status uses neither EventBridge nor SNS.
+- The Payment System is assumed external because of its Third Party label on the case-study diagram. The brief does not confirm that, so status arrives by a signed HTTPS webhook.
+- The 4-hour death-claim SLA is the configured default and is still pending business confirmation.
+- Authentication of claimants, analysts, and the channel is out of scope. The webhook signature is in scope.
+- Partial payments are out of scope.
+- The Client Registry, Policy Manager, and Payment are reached only through outbound ports. Tests and Compose mock them with WireMock.
 
-## Open — set in a later ADR
+## Recommended changes
 
-Rows without a decided "where it is set" cell are still open. Do not invent values for them in code or in this file.
+1. **The Payment System publishes payment events, or retries the webhook with backoff.** ADR-0002 leaves EventBridge as the upgrade if Payment is internal, and it expects an external Payment System to call the webhook again when this service is down. The sample applies the callback in the request. The Compose payment stub returns 202 and does not call back. `scripts/demo.ps1` sends the callback itself.
+2. **The Claims System UI calls `POST /claims/{id}/decision` and reads `GET /claims/{id}`.** The UI already exists and is outside this repo. Approve is the path that starts payment. The sample does not authenticate that call.
+3. **The Client Registry and the Policy Manager publish versioned OpenAPI, and they distinguish not found from unavailable.** The adapters already map HTTP 404 to a business result and map timeouts and other statuses to an unavailable error. Policy Manager 404 becomes `NO_COVER`, so a missing policy and a policy with no cover are one result. A client response of HTTP 200 whose status is not `ACTIVE` is unavailable, not an unknown client. A contract would make those splits explicit.
+4. **The Policy Manager returns a cover limit.** Straight-through uses `claims.straight-through.limit`. The policy payload today is `policyNumber`, `status`, and `covered`.
+5. **Every system carries this claim id, and a correlation id.** The claim id is already the idempotency key and the callback's `claimId`. None of the outbound calls send a correlation id.
+6. **Claim history is event sourced.** The event list stored on the claim is a step toward rebuilding state from events and publishing them. The payment webhook stays as ADR-0002 decided.
+7. **Delete the SQS message only after processing succeeds.** `SqsClaimQueue.receive` deletes the message before the client, policy, and payment calls. `maxReceiveCount` 4 therefore never sees those failures, and `claims-dlq` does not mean the downstream call failed. `InMemoryPriorityClaimQueue.receive` drops the message at the same point.
+8. **Death-certificate upload, proposed and not implemented.** Diagram (e) is the flow. The frontend would call `POST /claims/{id}/documents` with the content type and size. The service would check that the claim exists and is a death claim, then return a presigned POST of about 5 minutes, locked to `claims/{claimId}/documents/{documentId}`, for PDF, JPEG, or PNG, up to about 10 MB. The browser would upload to S3. An S3 event would reach GuardDuty Malware Protection for S3 through EventBridge or SQS, and only a clean file would be marked available. The claim's DynamoDB item would store `claimId`, `documentId`, type, SHA-256, and scan status. Analysts would receive a short-lived presigned download, and only an analyst role would receive one. An analyst could not approve a death claim until it had a clean certificate. The bucket would be private, with Block Public Access, SSE-KMS, versioning, Object Lock for the retention period, a lifecycle rule to Glacier, and CloudTrail data events, because the object is sensitive personal data (POPIA). The hexagonal shape would add an outbound port, `DocumentStore`, with an S3 adapter. LocalStack Community can serve S3 and presigned URLs, so this could be tested locally by adding `s3` to `SERVICES`; the current Compose file only enables `sqs` and `dynamodb`.
+
+## Open
+
+A row without a decided value is still open. Do not invent values for these.
 
 | Item | Where it is set |
 |---|---|
-| Straight-through amount limit | `claims.straight-through.limit`, passed into the straight-through use case. Strictly under the limit. Default 10000.00. |
-| What counts as a flag | A boolean `flagged` on the straight-through command. Who sets it remains open. |
-| What counts as borderline (analyst versus reject) | Not assigned to a ticket yet |
-| Whether the analyst queue is a separate port from the SQS queues | Not assigned to a ticket yet |
-| Analyst decision endpoint (approve or reject a queued claim, for example `POST /claims/{id}/decision`) | `POST /claims/{id}/decision`. No auth in this sample. |
-| Retry payment for a claim left APPROVED after a payment failure | Not assigned to a ticket yet |
-| What happens after PAYMENT_FAILED (retry payment, analyst review, or terminal) | Not assigned to a ticket yet |
-| Currency and scale of amount | Not decided |
-| Full event sourcing for the claim | Not assigned to a ticket yet |
-| Where payee bank details are held (claim or payment request) | Not assigned to a ticket yet |
-| Save-then-enqueue gap (transactional outbox in production) | Not assigned to a ticket yet |
-| Retries, backoff and dead-letter for worker failures (SQS redrive in the queue adapter; the in-memory fake removes on receive, so a failed message is lost in tests) | Not assigned to a ticket yet |
-| Queue payment callbacks before applying (ADR-0002) | The endpoint applies synchronously for now |
-| `state-claim.md` says the clock keeps running; ADR-0003 stops it at `APPROVED` or `REJECTED`. This ticket follows ADR-0003. | |
+| Backoff timing | `init-aws.sh` sets visibility to 30 seconds and `maxReceiveCount` to 4. The ADR-0002 delays of 1s, 2s, and 4s are not implemented. |
+| In-memory queue drops a message on receive | `InMemoryPriorityClaimQueue.receive` removes the message before processing. A later failure loses it. There is no in-memory DLQ. |
+| Analyst flagging after the DLQ | Not implemented. |
+| Retry payment for a claim left `APPROVED` | Approve is saved before initiate. A failed initiate leaves `APPROVED`. There is no retry. |
+| Who sets the flag | `ClaimWorkerService` passes `false`. Who sets the flag is open. |
+| Payee bank details | Not on the client response or the payment request. |
+| What happens after `PAYMENT_FAILED` | `PAYMENT_FAILED` has no onward transition. |
+| Authentication of claimants, analysts, and the channel | Out of scope. The webhook signature is implemented. |
+| What counts as borderline | No rule in the code. |
+| Whether the analyst queue is a separate port | `AWAITING_ANALYST` is a status. ADR-0001 left a separate port open. |
+| Currency and scale of `amount` | `amount` is a `BigDecimal`. There is no currency field. |
+| Save-then-enqueue gap | `SubmitClaimService` saves, then enqueues. There is no outbox. |
+| Queue the payment callback before applying it | `POST /payments/callback` applies the status in the request. ADR-0002's queue-then-worker is not implemented. |
+| `state-claim.md` says the death-claim clock keeps running in `PAYMENT_PENDING`. ADR-0004 and the code stop it at `APPROVED` or `REJECTED`. This file follows ADR-0004. | The diagram file is unchanged. |

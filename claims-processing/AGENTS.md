@@ -1,4 +1,4 @@
-# AGENTS.md: claims-service
+# AGENTS.md: claims-processing
 
 ## Golden rule
 
@@ -7,13 +7,12 @@ Propose options with trade-offs; the human makes every decision. Ask for feedbac
 
 ## Project
 
-`claims-service` is an insurance claims-processing service built for a developer case study. A web
+`claims-processing` is the insurance claims service built for a developer case study. A web
 form posts claim JSON to it. It validates the client with the **Client Registry**, checks
 policy/plan/benefits with the **Policy Manager**, and initiates payment with the **Payment System**,
 which later reports the payment status back. These external systems are reached only through
 outbound ports and are mocked with WireMock in tests. **Death claims are time-sensitive and get SLA
-priority.** Storage is in-memory. AWS appears in the design docs (`docs/`). A LocalStack integration (local AWS emulation)
-may be added later if time allows; do not add AWS dependencies or LocalStack setup unless asked. There is no frontend.
+priority.** The default profile keeps the queue and storage in memory; profile localstack uses SQS and DynamoDB on LocalStack (docker compose). There is no frontend.
 
 Stack: Java 21, Maven (single module), Spring Boot (being added), JUnit, ArchUnit, WireMock.
 Base package: `com.claimsprocessing.claims`.
@@ -23,7 +22,7 @@ Base package: `com.claimsprocessing.claims`.
 - `./mvnw verify`: full build plus all tests, including the ArchUnit gate. Run it before saying a task is done.
 - `./mvnw test`: tests only.
 - `./mvnw test -Dtest=ArchitectureTest`: architecture gate only.
-- `docs/ai-usage.md` keeps the case-study task log. Do not add an AI log to a follow-up pull request. There is no logging script.
+- `scripts/log-ai.ps1 -Task "..." -Outcome Accepted|Modified|Rejected -Notes "..."`: log AI-assisted work to `docs/ai-usage.md`.
 - ADRs: use the `architecture-decision-record` skill (no script).
 
 ## Layer map (dependencies point inward)
@@ -82,7 +81,7 @@ Tests mirror the main package layout; architecture tests are in `src/test/java/c
    └─ mermaid-diagrams
    ```
    Each skill can also be used directly. Sub-skills hand control back to their caller.
-4. The task log stays in `docs/ai-usage.md` as part of the case-study write-up. Do not add an AI log to a follow-up pull request. There is no logging script.
+4. Log meaningful AI-assisted work with `scripts/log-ai.ps1` (what was asked, outcome, what changed).
 5. Keep changes small and focused, one concern per change. Don't touch unrelated files.
 6. Don't add dependencies without stating why; prefer what Spring Boot already manages.
 7. When requirements are ambiguous or missing (SLAs, external contracts), stop and ask (see Golden rule); record the answer in `docs/` or an ADR only once the human confirms it.

@@ -62,8 +62,8 @@ Draft order; reorder or cut freely.
 
 ## 6. Documentation
 
-- [ ] solution.md: concise description, assumptions (review), recommended changes to existing systems, and how the systems interact (sequence diagrams for the happy path, death claim, analyst decision and payment callback, plus a short reliability section); fix stale lines (in-memory only, LocalStack out of scope)
-- [ ] README: what it is, project structure and layers, how to run (local, Docker, LocalStack) and test, links to solution.md, the diagrams and the ADRs
+- [x] solution.md: concise description, assumptions (review), recommended changes to existing systems, and how the systems interact (sequence diagrams for the happy path, death claim, analyst decision and payment callback, plus a short reliability section); fix stale lines (in-memory only, LocalStack out of scope)
+- [x] README: what it is, project structure and layers, how to run (local, Docker, LocalStack) and test, links to solution.md, the diagrams and the ADRs
 - [x] ai-usage.md: how AI was used, what for, and the approach (AGENTS.md, skills, review gates)
 
 ## 7. Final
