@@ -1,0 +1,9 @@
+claims:
+  localstack:
+    endpoint: http://localhost:4566
+    region: us-east-1
+    access-key: test
+    secret-key: test
+    death-queue-name: claims-death
+    standard-queue-name: claims-standard
+    table-name: claims

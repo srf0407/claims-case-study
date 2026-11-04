@@ -68,5 +68,5 @@ Draft order; reorder or cut freely.
 
 ## 6. Optional
 - [x] Death-claim SLA warning and breach alarms (config, monitoring)
-- [ ] LocalStack integration (SQS / DynamoDB)
+- [x] LocalStack integration (SQS / DynamoDB)
 - [ ] Final check against the brief

@@ -19,6 +19,7 @@ import com.claimsprocessing.claims.application.port.out.ClaimQueuePort;
 import com.claimsprocessing.claims.application.port.out.ClaimRepositoryPort;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Profile;
 import tools.jackson.databind.ObjectMapper;
 
 @Configuration
@@ -30,6 +31,7 @@ public class UseCaseConfig {
     }
 
     @Bean
+    @Profile("!localstack")
     ClaimQueuePort claimQueuePort() {
         return new InMemoryPriorityClaimQueue();
     }

@@ -82,6 +82,42 @@ public final class Claim {
                 List.copyOf(List.of(new ClaimAccepted(clock.instant()))));
     }
 
+    public static Claim restore(
+            ClaimId id,
+            String clientId,
+            String policyNumber,
+            ClaimType claimType,
+            BigDecimal amount,
+            LocalDate incidentDate,
+            LocalDate dateOfDeath,
+            String deathCertificateRef,
+            ClaimStatus status,
+            Optional<RejectionReason> rejectionReason,
+            List<ClaimEvent> events) {
+        if (id == null) {
+            throw new InvalidClaimException("Claim id is required");
+        }
+        if (status == null) {
+            throw new InvalidClaimException("status is required");
+        }
+        validate(claimType, clientId, policyNumber, amount, incidentDate, dateOfDeath, deathCertificateRef);
+        if (events == null || events.isEmpty()) {
+            throw new InvalidClaimException("events are required");
+        }
+        return new Claim(
+                id,
+                clientId,
+                policyNumber,
+                claimType,
+                amount,
+                incidentDate,
+                dateOfDeath,
+                deathCertificateRef,
+                status,
+                rejectionReason,
+                List.copyOf(events));
+    }
+
     public Claim transitionTo(ClaimStatus next, Clock clock) {
         Objects.requireNonNull(clock, "clock");
         Objects.requireNonNull(next, "status");

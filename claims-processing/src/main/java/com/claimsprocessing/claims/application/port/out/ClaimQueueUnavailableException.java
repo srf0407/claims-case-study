@@ -5,4 +5,8 @@ public final class ClaimQueueUnavailableException extends RuntimeException {
     public ClaimQueueUnavailableException(String message) {
         super(message);
     }
+
+    public ClaimQueueUnavailableException(String message, Throwable cause) {
+        super(message, cause);
+    }
 }
