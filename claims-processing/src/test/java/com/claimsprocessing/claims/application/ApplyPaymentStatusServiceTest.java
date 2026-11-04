@@ -345,5 +345,14 @@ class ApplyPaymentStatusServiceTest {
             findCount++;
             return Optional.ofNullable(claims.get(id));
         }
+
+        @Override
+        public List<Claim> findOpenDeathClaims() {
+            return claims.values().stream()
+                    .filter(claim -> claim.claimType() == ClaimType.DEATH)
+                    .filter(claim -> claim.status() == ClaimStatus.ACCEPTED
+                            || claim.status() == ClaimStatus.AWAITING_ANALYST)
+                    .toList();
+        }
     }
 }

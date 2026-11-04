@@ -2,6 +2,8 @@ package com.claimsprocessing.claims.domain;
 
 import java.math.BigDecimal;
 import java.time.Clock;
+import java.time.Duration;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
@@ -111,6 +113,29 @@ public final class Claim {
         return claimType != ClaimType.DEATH && !flagged && amount.compareTo(limit) < 0;
     }
 
+    public DeathSlaLevel openDeathSlaLevel(Instant now, Duration duration, double warningFraction) {
+        Objects.requireNonNull(now, "now");
+        Objects.requireNonNull(duration, "duration");
+        if (claimType != ClaimType.DEATH || !openForDeathSla(status)) {
+            throw new InvalidClaimException("open death claim is required");
+        }
+        Instant acceptedAt = events.stream()
+                .filter(ClaimAccepted.class::isInstance)
+                .map(ClaimAccepted.class::cast)
+                .map(ClaimAccepted::occurredAt)
+                .findFirst()
+                .orElseThrow(() -> new InvalidClaimException("accept time is required"));
+        Duration elapsed = Duration.between(acceptedAt, now);
+        if (elapsed.compareTo(duration) >= 0) {
+            return DeathSlaLevel.BREACH;
+        }
+        Duration warningAfter = Duration.ofNanos(Math.round(duration.toNanos() * warningFraction));
+        if (elapsed.compareTo(warningAfter) >= 0) {
+            return DeathSlaLevel.WARNING;
+        }
+        return DeathSlaLevel.ON_TIME;
+    }
+
     private Claim copyWith(ClaimStatus status, Optional<RejectionReason> rejectionReason, List<ClaimEvent> events) {
         return new Claim(
                 id,
@@ -124,6 +149,10 @@ public final class Claim {
                 status,
                 rejectionReason,
                 events);
+    }
+
+    private static boolean openForDeathSla(ClaimStatus status) {
+        return status == ClaimStatus.ACCEPTED || status == ClaimStatus.AWAITING_ANALYST;
     }
 
     private static boolean canRejectFrom(ClaimStatus status) {

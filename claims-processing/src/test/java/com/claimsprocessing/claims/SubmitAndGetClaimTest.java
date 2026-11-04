@@ -14,7 +14,7 @@ import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.context.WebApplicationContext;
 
-@SpringBootTest
+@SpringBootTest(properties = "claims.death-sla.check-interval=PT24H")
 class SubmitAndGetClaimTest {
 
     private final WebApplicationContext context;
