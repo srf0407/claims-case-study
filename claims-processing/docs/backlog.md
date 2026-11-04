@@ -38,7 +38,6 @@ Draft order; reorder or cut freely.
 - [x] Enqueue accepted claims for the worker (queue port, in-memory fake)
 - [x] Death-claim priority handling
 - [x] Claim worker use case (receive, run client and policy checks, route)
-- [ ] Death-claim SLA warning and breach alarms (config, monitoring)
 - [ ] Remove ArchUnit empty-layer allowances (withOptionalLayers, failOnEmptyShould) once each layer has classes
 
 
@@ -48,10 +47,10 @@ Draft order; reorder or cut freely.
 - [ ] Claim intake endpoint (`POST /claims`)
 - [ ] Claim status endpoint (`GET /claims/{id}`)
 - [ ] Payment status callback endpoint
-- [ ] Client Registry client + WireMock tests
-- [ ] Policy Manager client + WireMock tests
-- [ ] Payment client + WireMock tests
-- [ ] In-memory claim repository
+- [x] Client Registry client + WireMock tests
+- [x] Policy Manager client + WireMock tests
+- [x] Payment client + WireMock tests
+- [x] In-memory claim repository
 - [ ] Error handling and validation responses
 
 
@@ -68,6 +67,6 @@ Draft order; reorder or cut freely.
 
 
 ## 6. Optional
-
+- [ ] Death-claim SLA warning and breach alarms (config, monitoring)
 - [ ] LocalStack integration (SQS / DynamoDB)
 - [ ] Final check against the brief
