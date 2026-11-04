@@ -23,7 +23,7 @@ Base package: `com.claimsprocessing.claims`.
 - `./mvnw verify`: full build plus all tests, including the ArchUnit gate. Run it before saying a task is done.
 - `./mvnw test`: tests only.
 - `./mvnw test -Dtest=ArchitectureTest`: architecture gate only.
-- Add a row to `docs/ai-usage.md` for meaningful AI-assisted work (task, outcome `Accepted`, `Modified`, or `Rejected`, and notes). There is no logging script.
+- Do not add a task log, or any new rows, to `docs/ai-usage.md`. That file is the finished case-study write-up. Later pull requests must not append an AI log to it. There is no logging script.
 - ADRs: use the `architecture-decision-record` skill (no script).
 
 ## Layer map (dependencies point inward)
@@ -82,7 +82,7 @@ Tests mirror the main package layout; architecture tests are in `src/test/java/c
    └─ mermaid-diagrams
    ```
    Each skill can also be used directly. Sub-skills hand control back to their caller.
-4. Log meaningful AI-assisted work by adding a row to `docs/ai-usage.md` (what was asked, outcome, what changed). There is no logging script.
+4. Do not log AI-assisted work in `docs/ai-usage.md`. There is no task log and no logging script. Later pull requests must not add one.
 5. Keep changes small and focused, one concern per change. Don't touch unrelated files.
 6. Don't add dependencies without stating why; prefer what Spring Boot already manages.
 7. When requirements are ambiguous or missing (SLAs, external contracts), stop and ask (see Golden rule); record the answer in `docs/` or an ADR only once the human confirms it.

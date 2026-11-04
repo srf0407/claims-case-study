@@ -45,8 +45,9 @@ STOP.
 Only after the developer approves the text: write the file(s) and the approved Open-table change.
 Show the files changed, one line each. Ask:
 - whether to set a new ADR to `Accepted`,
-- whether to tick the item off in `docs/backlog.md`,
-- whether to add a row to `docs/ai-usage.md` (propose the task, outcome, and notes).
+- whether to tick the item off in `docs/backlog.md`.
+
+Do not add a task log or new rows to `docs/ai-usage.md`. That write-up is finished. Later pull requests must not append an AI log.
 
 STOP.
 
@@ -54,4 +55,4 @@ STOP.
 No test plan, no build, no `review-changes`; the consistency check replaces them.
 
 ## Needs explicit approval every time
-Edits to `docs/` or ADRs, ADR status changes, ticking `docs/backlog.md`, adding a row to `docs/ai-usage.md`, commits, pushes.
+Edits to `docs/` or ADRs, ADR status changes, ticking `docs/backlog.md`, commits, pushes. Do not append an AI log to `docs/ai-usage.md`.
