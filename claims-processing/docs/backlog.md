@@ -38,7 +38,7 @@ Draft order; reorder or cut freely.
 - [x] Enqueue accepted claims for the worker (queue port, in-memory fake)
 - [x] Death-claim priority handling
 - [x] Claim worker use case (receive, run client and policy checks, route)
-- [ ] Remove ArchUnit empty-layer allowances (withOptionalLayers, failOnEmptyShould) once each layer has classes
+- [x] Remove ArchUnit empty-layer allowances (withOptionalLayers, failOnEmptyShould) once each layer has classes
 
 
 
