@@ -7,6 +7,7 @@ import com.claimsprocessing.claims.application.port.in.ApplyPaymentStatusCommand
 import com.claimsprocessing.claims.application.port.in.ApplyPaymentStatusUseCase;
 import com.claimsprocessing.claims.application.port.out.ClaimRepositoryPort;
 import com.claimsprocessing.claims.domain.Claim;
+import com.claimsprocessing.claims.domain.ClaimId;
 import com.claimsprocessing.claims.domain.ClaimStatus;
 
 public final class ApplyPaymentStatusService implements ApplyPaymentStatusUseCase {
@@ -40,7 +41,19 @@ public final class ApplyPaymentStatusService implements ApplyPaymentStatusUseCas
         if (claim.status() != ClaimStatus.PAYMENT_PENDING) {
             throw new IllegalStateException("Claim " + claim.id().value() + " is " + claim.status().name());
         }
-        claimRepository.save(claim.transitionTo(target, clock));
+        Claim updated = claim.transitionTo(target, clock);
+        if (!claimRepository.replaceIfStatus(updated, ClaimStatus.PAYMENT_PENDING)) {
+            return lostRace(command.claimId(), target);
+        }
         return PaymentStatusResult.APPLIED;
+    }
+
+    private PaymentStatusResult lostRace(ClaimId claimId, ClaimStatus target) {
+        Claim current = claimRepository.findById(claimId)
+                .orElseThrow(() -> new ClaimNotFoundException(claimId));
+        if (current.status() == target) {
+            return PaymentStatusResult.DUPLICATE;
+        }
+        throw new IllegalStateException("Claim " + current.id().value() + " is " + current.status().name());
     }
 }

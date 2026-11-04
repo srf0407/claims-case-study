@@ -5,6 +5,7 @@ import java.util.Objects;
 import com.claimsprocessing.claims.application.ClientCheckResult;
 import com.claimsprocessing.claims.application.port.out.ClientRegistryPort;
 import com.claimsprocessing.claims.application.port.out.ClientRegistryUnavailableException;
+import com.claimsprocessing.claims.domain.ClaimType;
 import org.springframework.http.converter.HttpMessageConversionException;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
@@ -20,7 +21,8 @@ public final class ClientRegistryClient implements ClientRegistryPort {
     }
 
     @Override
-    public ClientCheckResult check(String clientId) {
+    public ClientCheckResult check(String clientId, ClaimType claimType) {
+        Objects.requireNonNull(claimType, "claimType");
         try {
             return restClient.get()
                     .uri("/clients/{clientId}", clientId)
@@ -30,7 +32,7 @@ public final class ClientRegistryClient implements ClientRegistryPort {
                             return ClientCheckResult.UNKNOWN;
                         }
                         if (status == 200) {
-                            return mapper.toResult(response.bodyTo(ClientRegistryResponse.class));
+                            return mapper.toResult(response.bodyTo(ClientRegistryResponse.class), claimType);
                         }
                         throw unavailable("Client Registry returned HTTP " + status);
                     });

@@ -7,7 +7,7 @@ Date: 2026-11-04 · Decided by: The developer
 
 ADR-0003 sets the death-claim SLA: 4 clock hours from accept (`ClaimAccepted.occurredAt`) until the analyst decision, or until rejection with no analyst decision. The clock runs only while the claim is `ACCEPTED` or `AWAITING_ANALYST`. It stops at `APPROVED` or `REJECTED`. A warning fires at 75% of the duration, a breach at the duration. Both numbers are config. ADR-0003 maps the alarms to CloudWatch and adds no port.
 
-ADR-0001 sends every call out of a use case through an outbound port. This sample must not call CloudWatch. `state-claim.md` still says the clock keeps running when a death claim sits in `PAYMENT_PENDING` after payment-status retries are exhausted. That sentence stays on the `solution.md` Open table. This ADR follows ADR-0003.
+ADR-0001 sends every call out of a use case through an outbound port. This sample must not call CloudWatch. [state-claim.md](../diagrams/state-claim.md) shows this clock as the sample. The ideal on that page sends a `PAYMENT_FAILED` death claim back to `AWAITING_ANALYST`, and the clock runs again from the original accept time. A claim left in `PAYMENT_PENDING` does not run this clock.
 
 ## Options
 

@@ -176,6 +176,37 @@ class SqsClaimQueueTest {
     }
 
     @Test
+    void should_release_a_standard_message_without_deleting_it_and_then_read_the_death_queue() {
+        // given
+        ClaimId deathId = new ClaimId(UUID.fromString("22222222-2222-2222-2222-222222222222"));
+        ClaimQueuedMessage funeral = new ClaimQueuedMessage(CLAIM_ID, ClaimType.FUNERAL);
+        ClaimQueuedMessage death = new ClaimQueuedMessage(deathId, ClaimType.DEATH);
+        int[] deathPolls = {0};
+        when(sqsClient.receiveMessage(any(ReceiveMessageRequest.class))).thenAnswer(invocation -> {
+            ReceiveMessageRequest request = invocation.getArgument(0);
+            if (DEATH_URL.equals(request.queueUrl())) {
+                deathPolls[0]++;
+                if (deathPolls[0] == 1) {
+                    return emptyResponse();
+                }
+                return response(sqsMessage(mapper.toBody(death), "rh-death"));
+            }
+            return response(sqsMessage(mapper.toBody(funeral), "rh-funeral"));
+        });
+
+        // when
+        var received = queue.receive();
+        queue.release(received.orElseThrow());
+        var next = queue.receive();
+
+        // then
+        assertThat(received).contains(funeral);
+        assertThat(next).contains(death);
+        verify(sqsClient, never()).deleteMessage(any(DeleteMessageRequest.class));
+        verify(sqsClient, never()).changeMessageVisibility(any(ChangeMessageVisibilityRequest.class));
+    }
+
+    @Test
     void should_return_empty_when_both_queues_are_empty() {
         // given
         when(sqsClient.receiveMessage(any(ReceiveMessageRequest.class))).thenReturn(emptyResponse());

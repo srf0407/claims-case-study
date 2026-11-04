@@ -108,6 +108,18 @@ public final class SqsClaimQueue implements ClaimQueuePort {
         clearInflight();
     }
 
+    @Override
+    public synchronized void release(ClaimQueuedMessage message) {
+        Objects.requireNonNull(message, "message");
+        if (inflightMessage == null) {
+            return;
+        }
+        if (!inflightMessage.equals(message)) {
+            throw new IllegalStateException("Claim queue message is not in flight");
+        }
+        clearInflight();
+    }
+
     private Optional<Message> poll(String queueUrl) {
         try {
             ReceiveMessageResponse response = sqsClient.receiveMessage(ReceiveMessageRequest.builder()

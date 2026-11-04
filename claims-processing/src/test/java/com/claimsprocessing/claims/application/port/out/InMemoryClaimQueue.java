@@ -76,4 +76,21 @@ public final class InMemoryClaimQueue implements ClaimQueuePort {
         }
         inflight = null;
     }
+
+    @Override
+    public synchronized void release(ClaimQueuedMessage message) {
+        Objects.requireNonNull(message, "message");
+        if (inflight == null) {
+            return;
+        }
+        if (!inflight.equals(message)) {
+            throw new IllegalStateException("Claim queue message is not in flight");
+        }
+        inflight = null;
+        if (message.claimType() == ClaimType.DEATH) {
+            deathMessages.addFirst(message);
+            return;
+        }
+        normalMessages.addFirst(message);
+    }
 }

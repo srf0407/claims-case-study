@@ -129,6 +129,25 @@ class InMemoryClaimQueueTest {
     }
 
     @Test
+    void should_put_a_released_standard_message_back_behind_a_death_message() {
+        // given
+        var queue = new InMemoryClaimQueue();
+        var funeral = message("11111111-1111-1111-1111-111111111111", ClaimType.FUNERAL);
+        queue.enqueue(funeral);
+        var received = queue.receive();
+        var death = message("22222222-2222-2222-2222-222222222222", ClaimType.DEATH);
+        queue.enqueue(death);
+
+        // when
+        queue.release(received.orElseThrow());
+
+        // then
+        assertThat(queue.receive()).contains(death);
+        assertThat(queue.messages()).containsExactly(
+                death, funeral);
+    }
+
+    @Test
     void should_return_a_waiting_message_when_enqueue_is_set_to_fail() {
         // given
         var queue = new InMemoryClaimQueue();

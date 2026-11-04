@@ -108,6 +108,25 @@ class InMemoryPriorityClaimQueueTest {
         assertThat(queue.receive()).isEmpty();
     }
 
+    @Test
+    void should_read_a_death_message_after_a_standard_message_is_released() {
+        // given
+        var queue = new InMemoryPriorityClaimQueue();
+        var funeral = message("11111111-1111-1111-1111-111111111111", ClaimType.FUNERAL);
+        var death = message("22222222-2222-2222-2222-222222222222", ClaimType.DEATH);
+        queue.enqueue(funeral);
+        var received = queue.receive();
+        queue.enqueue(death);
+
+        // when
+        queue.release(received.orElseThrow());
+        var next = queue.receive();
+
+        // then
+        assertThat(received).contains(funeral);
+        assertThat(next).contains(death);
+    }
+
     private static ClaimQueuedMessage message(String id, ClaimType claimType) {
         return new ClaimQueuedMessage(new ClaimId(UUID.fromString(id)), claimType);
     }

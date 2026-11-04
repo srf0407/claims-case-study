@@ -221,9 +221,12 @@ class ValidateClientServiceTest {
         }
 
         @Override
-        public ClientCheckResult check(String clientId) {
+        public ClientCheckResult check(String clientId, ClaimType claimType) {
             callCount++;
             checkedClientId = clientId;
+            if (claimType == null) {
+                throw new NullPointerException("claimType");
+            }
             if (failure != null) {
                 throw failure;
             }
