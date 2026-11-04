@@ -92,11 +92,12 @@ Rows without a decided "where it is set" cell are still open. Do not invent valu
 
 | Item | Where it is set |
 |---|---|
-| Straight-through amount limit | Constructor argument on the straight-through use case. Strictly under the limit. Illustrative default 10000.00. |
+| Straight-through amount limit | `claims.straight-through.limit`, passed into the straight-through use case. Strictly under the limit. Default 10000.00. |
 | What counts as a flag | A boolean `flagged` on the straight-through command. Who sets it remains open. |
 | What counts as borderline (analyst versus reject) | Not assigned to a ticket yet |
 | Whether the analyst queue is a separate port from the SQS queues | Not assigned to a ticket yet |
-| Analyst decision endpoint (approve or reject a queued claim, for example `POST /claims/{id}/decision`) | Not assigned to a ticket yet |
+| Analyst decision endpoint (approve or reject a queued claim, for example `POST /claims/{id}/decision`) | `POST /claims/{id}/decision`. No auth in this sample. |
+| Retry payment for a claim left APPROVED after a payment failure | Not assigned to a ticket yet |
 | What happens after PAYMENT_FAILED (retry payment, analyst review, or terminal) | Not assigned to a ticket yet |
 | Currency and scale of amount | Not decided |
 | Full event sourcing for the claim | Not assigned to a ticket yet |

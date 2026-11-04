@@ -16,3 +16,7 @@ claims:
     duration: PT4H
     warning-fraction: 0.75
     check-interval: PT1M
+  straight-through:
+    limit: "10000.00"
+  worker:
+    poll-interval: PT5S

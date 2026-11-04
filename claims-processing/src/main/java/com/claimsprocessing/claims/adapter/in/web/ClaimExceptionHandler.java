@@ -1,5 +1,6 @@
 package com.claimsprocessing.claims.adapter.in.web;
 
+import com.claimsprocessing.claims.application.ClaimNotAwaitingAnalystException;
 import com.claimsprocessing.claims.application.ClaimNotFoundException;
 import com.claimsprocessing.claims.domain.InvalidClaimException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -33,6 +34,21 @@ public class ClaimExceptionHandler {
     public ResponseEntity<ProblemDetail> handleClaimNotFound(HttpServletRequest request) {
         return problem(
                 request, HttpStatus.NOT_FOUND, "/problems/claim-not-found", "Claim not found", "Claim not found");
+    }
+
+    @ExceptionHandler(ClaimNotAwaitingAnalystException.class)
+    public ResponseEntity<ProblemDetail> handleNotAwaitingAnalyst(HttpServletRequest request) {
+        return problem(
+                request,
+                HttpStatus.CONFLICT,
+                "/problems/claim-not-awaiting-analyst",
+                "Claim is not awaiting an analyst",
+                "Claim is not awaiting an analyst");
+    }
+
+    @ExceptionHandler(UnreadableDecisionException.class)
+    public ResponseEntity<ProblemDetail> handleUnreadableDecision(HttpServletRequest request) {
+        return malformed(request, "Request body could not be read");
     }
 
     @ExceptionHandler(HttpMessageNotReadableException.class)

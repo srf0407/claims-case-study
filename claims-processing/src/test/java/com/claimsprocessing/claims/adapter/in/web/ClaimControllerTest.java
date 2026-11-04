@@ -15,6 +15,7 @@ import java.util.UUID;
 
 import com.claimsprocessing.claims.application.ClaimQueuedMessageMapper;
 import com.claimsprocessing.claims.application.SubmitClaimService;
+import com.claimsprocessing.claims.application.port.in.DecideClaimUseCase;
 import com.claimsprocessing.claims.application.port.in.GetClaimQuery;
 import com.claimsprocessing.claims.application.port.in.GetClaimUseCase;
 import com.claimsprocessing.claims.application.port.in.SubmitClaimCommand;
@@ -268,3 +269,9 @@ class ClaimControllerTest {
         };
     }
 }
+
+    private static DecideClaimUseCase unusedDecide() {
+        return command -> {
+            throw new UnsupportedOperationException("decide");
+        };
+    }

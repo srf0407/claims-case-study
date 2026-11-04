@@ -19,6 +19,7 @@ import com.claimsprocessing.claims.application.ClaimNotFoundException;
 import com.claimsprocessing.claims.application.PaymentStatusResult;
 import com.claimsprocessing.claims.application.port.in.ApplyPaymentStatusCommand;
 import com.claimsprocessing.claims.application.port.in.ApplyPaymentStatusUseCase;
+import com.claimsprocessing.claims.application.port.in.DecideClaimUseCase;
 import com.claimsprocessing.claims.application.port.in.GetClaimUseCase;
 import com.claimsprocessing.claims.application.port.in.SubmitClaimCommand;
 import com.claimsprocessing.claims.application.port.in.SubmitClaimUseCase;
@@ -462,7 +463,8 @@ class PaymentCallbackControllerTest {
                                 unusedSubmit(), new SubmitClaimMapper(), query -> {
                                     throw new UnsupportedOperationException("get");
                                 }, new GetClaimMapper()),
-                        callbackController(new FakeApplyPaymentStatus(PaymentStatusResult.APPLIED)))
+                                }, new GetClaimMapper(),
+                                unusedDecide(), new DecideClaimMapper()),
                 .setControllerAdvice(new ClaimExceptionHandler(), new PaymentCallbackExceptionHandler())
                 .setMessageConverters(new JacksonJsonHttpMessageConverter())
                 .build();
@@ -533,6 +535,12 @@ class PaymentCallbackControllerTest {
     }
 
     private static final class FakeApplyPaymentStatus implements ApplyPaymentStatusUseCase {
+    private static DecideClaimUseCase unusedDecide() {
+        return command -> {
+            throw new UnsupportedOperationException("decide");
+        };
+    }
+
 
         private final PaymentStatusResult result;
         private final RuntimeException failure;
