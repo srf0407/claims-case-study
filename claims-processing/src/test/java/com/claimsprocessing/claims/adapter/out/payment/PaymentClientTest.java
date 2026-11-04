@@ -20,7 +20,6 @@ import com.claimsprocessing.claims.domain.ClaimId;
 import com.github.tomakehurst.wiremock.http.Fault;
 import com.github.tomakehurst.wiremock.http.RequestMethod;
 import com.github.tomakehurst.wiremock.junit5.WireMockExtension;
-import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
@@ -44,16 +43,9 @@ class PaymentClientTest {
 
     private PaymentPort client;
 
-    @BeforeAll
-    static void warmUpTheHttpClient() {
-        // The first JDK HTTP call on a cold JVM can exceed the 300ms read timeout.
-        wireMock.stubFor(post(urlEqualTo("/payments")).willReturn(aResponse().withStatus(202)));
-        new PaymentClient(restClient(Duration.ofSeconds(5)), new PaymentMapper()).initiate(REQUEST);
-    }
-
     @BeforeEach
     void setUp() {
-        client = new PaymentClient(restClient(Duration.ofMillis(300)), new PaymentMapper());
+        client = new PaymentClient(restClient(Duration.ofSeconds(5)), new PaymentMapper());
     }
 
     @Test
@@ -95,8 +87,9 @@ class PaymentClientTest {
     @Test
     void should_throw_payment_unavailable_when_the_read_times_out() {
         // given
+        client = new PaymentClient(restClient(Duration.ofMillis(300)), new PaymentMapper());
         wireMock.stubFor(post(urlEqualTo("/payments"))
-                .willReturn(aResponse().withStatus(202).withFixedDelay(1000)));
+                .willReturn(aResponse().withStatus(202).withFixedDelay(1500)));
 
         // when / then
         assertUnavailable(() -> client.initiate(REQUEST));
@@ -148,7 +141,7 @@ class PaymentClientTest {
     private static RestClient restClient(Duration readTimeout) {
         HttpClient httpClient = HttpClient.newBuilder()
                 .version(HttpClient.Version.HTTP_1_1)
-                .connectTimeout(Duration.ofMillis(200))
+                .connectTimeout(Duration.ofSeconds(2))
                 .build();
         var factory = new JdkClientHttpRequestFactory(httpClient);
         factory.setReadTimeout(readTimeout);
