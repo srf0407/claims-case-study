@@ -1,6 +1,7 @@
 package com.claimsprocessing.claims.adapter.out.queue;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.util.UUID;
 
@@ -73,6 +74,18 @@ class InMemoryPriorityClaimQueueTest {
         // then
         assertThat(firstReceived).contains(disability);
         assertThat(secondReceived).contains(funeral);
+    }
+
+    @Test
+    void should_reject_a_null_message() {
+        // given
+        var queue = new InMemoryPriorityClaimQueue();
+
+        // when / then
+        assertThatThrownBy(() -> queue.enqueue(null))
+                .isInstanceOf(NullPointerException.class)
+                .hasMessage("message");
+        assertThat(queue.receive()).isEmpty();
     }
 
     private static ClaimQueuedMessage message(String id, ClaimType claimType) {

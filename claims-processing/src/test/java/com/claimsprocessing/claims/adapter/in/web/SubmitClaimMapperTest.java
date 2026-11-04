@@ -83,4 +83,12 @@ class SubmitClaimMapperTest {
                 .isInstanceOf(NullPointerException.class)
                 .hasMessage("request");
     }
+
+    @Test
+    void should_reject_a_null_claim_id_to_the_mapper() {
+        // given / when / then
+        assertThatThrownBy(() -> mapper.toResponse(null))
+                .isInstanceOf(NullPointerException.class)
+                .hasMessage("claimId");
+    }
 }

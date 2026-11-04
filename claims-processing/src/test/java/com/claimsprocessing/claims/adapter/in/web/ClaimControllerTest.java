@@ -5,8 +5,10 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.UUID;
 
@@ -17,6 +19,7 @@ import com.claimsprocessing.claims.application.port.in.SubmitClaimUseCase;
 import com.claimsprocessing.claims.application.port.out.InMemoryClaimQueue;
 import com.claimsprocessing.claims.application.port.out.InMemoryClaimRepository;
 import com.claimsprocessing.claims.domain.ClaimId;
+import com.claimsprocessing.claims.domain.ClaimType;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
 import org.springframework.http.converter.json.JacksonJsonHttpMessageConverter;
@@ -47,6 +50,14 @@ class ClaimControllerTest {
                 .andExpect(jsonPath("$.claimId").value(CLAIM_ID));
         assertThat(actions.andReturn().getResponse().getHeader("Location"))
                 .endsWith("/claims/" + CLAIM_ID);
+        assertThat(useCase.command).isEqualTo(new SubmitClaimCommand(
+                ClaimType.FUNERAL,
+                "C-1",
+                "P-1",
+                new BigDecimal("150.00"),
+                LocalDate.of(2026, 3, 1),
+                null,
+                null));
     }
 
     @Test
@@ -99,10 +110,12 @@ class ClaimControllerTest {
     private static final class FakeSubmitClaimUseCase implements SubmitClaimUseCase {
 
         private int calls;
+        private SubmitClaimCommand command;
 
         @Override
         public ClaimId submit(SubmitClaimCommand command) {
             calls++;
+            this.command = command;
             return new ClaimId(UUID.fromString(CLAIM_ID));
         }
     }
