@@ -11,6 +11,11 @@ import com.claimsprocessing.claims.application.port.in.ValidateClientCommand;
 import com.claimsprocessing.claims.application.port.in.ValidateClientUseCase;
 import com.claimsprocessing.claims.application.port.out.ClaimQueuePort;
 import com.claimsprocessing.claims.application.port.out.ClaimQueuedMessage;
+import com.claimsprocessing.claims.application.port.out.ClaimRepositoryUnavailableException;
+import com.claimsprocessing.claims.application.port.out.ClientRegistryUnavailableException;
+import com.claimsprocessing.claims.application.port.out.PaymentUnavailableException;
+import com.claimsprocessing.claims.application.port.out.PolicyManagerUnavailableException;
+import com.claimsprocessing.claims.domain.ClaimType;
 import com.claimsprocessing.claims.domain.IllegalClaimTransitionException;
 
 public final class ClaimWorkerService implements ClaimWorkerUseCase {
@@ -51,6 +56,14 @@ public final class ClaimWorkerService implements ClaimWorkerUseCase {
             return result;
         } catch (IllegalStateException | IllegalClaimTransitionException | ClaimNotFoundException exception) {
             claimQueue.acknowledge(message);
+            throw exception;
+        } catch (ClientRegistryUnavailableException
+                | PolicyManagerUnavailableException
+                | PaymentUnavailableException
+                | ClaimRepositoryUnavailableException exception) {
+            if (message.claimType() != ClaimType.DEATH) {
+                claimQueue.release(message);
+            }
             throw exception;
         }
     }

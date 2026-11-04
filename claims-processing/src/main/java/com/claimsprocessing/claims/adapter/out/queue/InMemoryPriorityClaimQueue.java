@@ -52,4 +52,25 @@ public final class InMemoryPriorityClaimQueue implements ClaimQueuePort {
         }
         inflight = null;
     }
+
+    @Override
+    public synchronized void release(ClaimQueuedMessage message) {
+        Objects.requireNonNull(message, "message");
+        if (inflight == null) {
+            return;
+        }
+        if (!inflight.equals(message)) {
+            throw new IllegalStateException("Claim queue message is not in flight");
+        }
+        inflight = null;
+        requeue(message);
+    }
+
+    private void requeue(ClaimQueuedMessage message) {
+        if (message.claimType() == ClaimType.DEATH) {
+            deathMessages.addFirst(message);
+            return;
+        }
+        normalMessages.addFirst(message);
+    }
 }

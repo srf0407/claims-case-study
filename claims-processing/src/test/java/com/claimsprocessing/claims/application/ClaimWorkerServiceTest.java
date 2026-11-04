@@ -282,6 +282,46 @@ class ClaimWorkerServiceTest {
         assertThat(claimQueue.messages()).containsExactly(new ClaimQueuedMessage(claimId, ClaimType.FUNERAL));
     }
 
+    @Test
+    void should_take_a_death_claim_after_a_standard_claim_is_released() {
+        // given
+        ClaimId funeralId = enqueue(ClaimType.FUNERAL);
+        var failure = new ClientRegistryUnavailableException("Client Registry is unavailable");
+        validateClient.willFail(failure);
+
+        // when
+        assertThatThrownBy(worker::process).isSameAs(failure);
+        ClaimId deathId = enqueue(ClaimType.DEATH);
+        validateClient.willAnswer(ClientCheckResult.KNOWN);
+        assessPolicy.willAnswer(PolicyAssessmentResult.COVERED);
+        straightThroughPayment.willAnswer(StraightThroughResult.SENT_TO_ANALYST);
+        ClaimWorkerResult result = worker.process();
+
+        // then
+        assertThat(result).isEqualTo(ClaimWorkerResult.SENT_TO_ANALYST);
+        assertThat(validateClient.commands()).containsExactly(
+                new ValidateClientCommand(funeralId), new ValidateClientCommand(deathId));
+        assertThat(claimQueue.messages()).containsExactly(new ClaimQueuedMessage(funeralId, ClaimType.FUNERAL));
+    }
+
+    @Test
+    void should_retry_a_death_claim_before_a_waiting_standard_claim() {
+        // given
+        ClaimId funeralId = enqueue(ClaimType.FUNERAL);
+        ClaimId deathId = enqueue(ClaimType.DEATH);
+        var failure = new ClientRegistryUnavailableException("Client Registry is unavailable");
+        validateClient.willFail(failure);
+
+        // when / then
+        assertThatThrownBy(worker::process).isSameAs(failure);
+        assertThatThrownBy(worker::process).isSameAs(failure);
+        assertThat(validateClient.commands())
+                .containsExactly(new ValidateClientCommand(deathId), new ValidateClientCommand(deathId));
+        assertThat(claimQueue.messages()).containsExactly(
+                new ClaimQueuedMessage(deathId, ClaimType.DEATH),
+                new ClaimQueuedMessage(funeralId, ClaimType.FUNERAL));
+    }
+
     private ClaimId enqueue(ClaimType claimType) {
         ClaimId claimId = new ClaimId(UUID.randomUUID());
         claimQueue.enqueue(new ClaimQueuedMessage(claimId, claimType));
@@ -309,6 +349,11 @@ class ClaimWorkerServiceTest {
         @Override
         public void acknowledge(ClaimQueuedMessage message) {
             throw new UnsupportedOperationException("acknowledge");
+        }
+
+        @Override
+        public void release(ClaimQueuedMessage message) {
+            throw new UnsupportedOperationException("release");
         }
     }
 

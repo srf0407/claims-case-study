@@ -14,6 +14,7 @@ import java.time.Duration;
 import com.claimsprocessing.claims.application.ClientCheckResult;
 import com.claimsprocessing.claims.application.port.out.ClientRegistryPort;
 import com.claimsprocessing.claims.application.port.out.ClientRegistryUnavailableException;
+import com.claimsprocessing.claims.domain.ClaimType;
 import com.github.tomakehurst.wiremock.http.Fault;
 import com.github.tomakehurst.wiremock.http.RequestMethod;
 import com.github.tomakehurst.wiremock.junit5.WireMockExtension;
@@ -47,10 +48,43 @@ class ClientRegistryClientTest {
                 .willReturn(okJson("{\"clientId\":\"C-1\",\"status\":\"ACTIVE\"}")));
 
         // when
-        ClientCheckResult result = client.check(CLIENT_ID);
+        ClientCheckResult result = client.check(CLIENT_ID, ClaimType.FUNERAL);
 
         // then
         assertThat(result).isEqualTo(ClientCheckResult.KNOWN);
+    }
+
+    @Test
+    void should_return_known_when_a_death_claim_client_is_deceased() {
+        // given
+        wireMock.stubFor(get(urlEqualTo("/clients/" + CLIENT_ID))
+                .willReturn(okJson("{\"clientId\":\"C-1\",\"status\":\"DECEASED\"}")));
+
+        // when
+        ClientCheckResult result = client.check(CLIENT_ID, ClaimType.DEATH);
+
+        // then
+        assertThat(result).isEqualTo(ClientCheckResult.KNOWN);
+    }
+
+    @Test
+    void should_throw_unavailable_when_a_funeral_claim_client_is_deceased() {
+        // given
+        wireMock.stubFor(get(urlEqualTo("/clients/" + CLIENT_ID))
+                .willReturn(okJson("{\"clientId\":\"C-1\",\"status\":\"DECEASED\"}")));
+
+        // when / then
+        assertUnavailable(() -> client.check(CLIENT_ID, ClaimType.FUNERAL));
+    }
+
+    @Test
+    void should_throw_unavailable_when_a_death_claim_client_is_not_active_or_deceased() {
+        // given
+        wireMock.stubFor(get(urlEqualTo("/clients/" + CLIENT_ID))
+                .willReturn(okJson("{\"clientId\":\"C-1\",\"status\":\"SUSPENDED\"}")));
+
+        // when / then
+        assertUnavailable(() -> client.check(CLIENT_ID, ClaimType.DEATH));
     }
 
     @Test
@@ -60,7 +94,7 @@ class ClientRegistryClientTest {
                 .willReturn(aResponse().withStatus(404)));
 
         // when
-        ClientCheckResult result = client.check(CLIENT_ID);
+        ClientCheckResult result = client.check(CLIENT_ID, ClaimType.FUNERAL);
 
         // then
         assertThat(result).isEqualTo(ClientCheckResult.UNKNOWN);
@@ -73,7 +107,7 @@ class ClientRegistryClientTest {
                 .willReturn(aResponse().withStatus(503)));
 
         // when / then
-        assertUnavailable(() -> client.check(CLIENT_ID));
+        assertUnavailable(() -> client.check(CLIENT_ID, ClaimType.FUNERAL));
     }
 
     @Test
@@ -83,7 +117,7 @@ class ClientRegistryClientTest {
                 .willReturn(aResponse().withStatus(400)));
 
         // when / then
-        assertUnavailable(() -> client.check(CLIENT_ID));
+        assertUnavailable(() -> client.check(CLIENT_ID, ClaimType.FUNERAL));
     }
 
     @Test
@@ -94,7 +128,7 @@ class ClientRegistryClientTest {
                 .willReturn(okJson("{\"clientId\":\"C-1\",\"status\":\"ACTIVE\"}").withFixedDelay(1500)));
 
         // when / then
-        assertUnavailable(() -> client.check(CLIENT_ID));
+        assertUnavailable(() -> client.check(CLIENT_ID, ClaimType.FUNERAL));
     }
 
     @Test
@@ -104,7 +138,7 @@ class ClientRegistryClientTest {
                 .willReturn(aResponse().withFault(Fault.CONNECTION_RESET_BY_PEER)));
 
         // when / then
-        assertUnavailable(() -> client.check(CLIENT_ID));
+        assertUnavailable(() -> client.check(CLIENT_ID, ClaimType.FUNERAL));
     }
 
     @Test
@@ -114,7 +148,7 @@ class ClientRegistryClientTest {
                 .willReturn(okJson("{\"clientId\":\"C-1\",\"status\":\"ACTIVE\"}")));
 
         // when
-        client.check(CLIENT_ID);
+        client.check(CLIENT_ID, ClaimType.FUNERAL);
 
         // then
         var served = wireMock.getAllServeEvents();

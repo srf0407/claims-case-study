@@ -227,6 +227,41 @@ class ApplyPaymentStatusServiceTest {
     }
 
     @Test
+    void should_report_a_duplicate_when_a_paid_write_wins_the_race() {
+        // given
+        Claim pending = pendingClaim();
+        claims.store(pending);
+        Claim paid = pending.transitionTo(ClaimStatus.PAID, clock);
+        claims.loseNextReplaceWith(paid);
+
+        // when
+        PaymentStatusResult result = applyPaymentStatus.apply(command(pending, PaymentOutcome.PAID));
+
+        // then
+        assertThat(result).isEqualTo(PaymentStatusResult.DUPLICATE);
+        assertThat(claims.saveCount()).isZero();
+        assertThat(claims.stored(pending.id()).status()).isEqualTo(ClaimStatus.PAID);
+        assertThat(claims.stored(pending.id()).events()).isEqualTo(paid.events());
+    }
+
+    @Test
+    void should_refuse_a_failed_outcome_when_a_paid_write_wins_the_race() {
+        // given
+        Claim pending = pendingClaim();
+        claims.store(pending);
+        Claim paid = pending.transitionTo(ClaimStatus.PAID, clock);
+        claims.loseNextReplaceWith(paid);
+
+        // when / then
+        assertThatThrownBy(() -> applyPaymentStatus.apply(command(pending, PaymentOutcome.FAILED)))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("Claim " + pending.id().value() + " is PAID");
+        assertThat(claims.saveCount()).isZero();
+        assertThat(claims.stored(pending.id()).status()).isEqualTo(ClaimStatus.PAID);
+        assertThat(claims.stored(pending.id()).events()).isEqualTo(paid.events());
+    }
+
+    @Test
     void should_reject_a_null_command() {
         // given / when / then
         assertThatThrownBy(() -> applyPaymentStatus.apply(null))
@@ -317,6 +352,11 @@ class ApplyPaymentStatusServiceTest {
         private final Map<ClaimId, Claim> claims = new HashMap<>();
         private int saveCount;
         private int findCount;
+        private Claim racedWinner;
+
+        void loseNextReplaceWith(Claim winner) {
+            this.racedWinner = winner;
+        }
 
         void store(Claim claim) {
             claims.put(claim.id(), claim);
@@ -338,6 +378,21 @@ class ApplyPaymentStatusServiceTest {
         public void save(Claim claim) {
             saveCount++;
             claims.put(claim.id(), claim);
+        }
+
+        @Override
+        public boolean replaceIfStatus(Claim claim, ClaimStatus expected) {
+            if (racedWinner != null) {
+                claims.put(racedWinner.id(), racedWinner);
+                racedWinner = null;
+                return false;
+            }
+            Claim current = claims.get(claim.id());
+            if (current == null || current.status() != expected) {
+                return false;
+            }
+            save(claim);
+            return true;
         }
 
         @Override

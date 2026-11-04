@@ -33,7 +33,7 @@ public final class ValidateClientService implements ValidateClientUseCase {
         if (claim.status() != ClaimStatus.ACCEPTED) {
             throw new IllegalStateException("Claim " + claim.id().value() + " is " + claim.status().name());
         }
-        ClientCheckResult result = clientRegistry.check(claim.clientId());
+        ClientCheckResult result = clientRegistry.check(claim.clientId(), claim.claimType());
         if (result == ClientCheckResult.UNKNOWN) {
             claimRepository.save(claim.reject(RejectionReason.UNKNOWN_CLIENT, clock));
         }
