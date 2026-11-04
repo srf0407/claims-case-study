@@ -1,0 +1,17 @@
+{
+  "request": {
+    "method": "GET",
+    "urlPath": "/policies/P-NOCOVER/cover"
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "jsonBody": {
+      "policyNumber": "P-NOCOVER",
+      "status": "ACTIVE",
+      "covered": false
+    }
+  }
+}

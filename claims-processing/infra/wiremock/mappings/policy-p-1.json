@@ -1,0 +1,17 @@
+{
+  "request": {
+    "method": "GET",
+    "urlPath": "/policies/P-1/cover"
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "jsonBody": {
+      "policyNumber": "P-1",
+      "status": "ACTIVE",
+      "covered": true
+    }
+  }
+}

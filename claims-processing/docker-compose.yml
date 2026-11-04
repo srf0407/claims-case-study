@@ -3,12 +3,57 @@ services:
     build: .
     ports:
       - "8080:8080"
+    environment:
+      SPRING_PROFILES_ACTIVE: localstack
+      CLAIMS_LOCALSTACK_ENDPOINT: http://localstack:4566
+      CLAIMS_CLIENT_REGISTRY_BASE_URL: http://wiremock:8080
+      CLAIMS_POLICY_MANAGER_BASE_URL: http://wiremock:8080
+      CLAIMS_PAYMENT_BASE_URL: http://wiremock:8080
+      PAYMENT_CALLBACK_SECRET: dev-callback-secret
+    depends_on:
+      localstack:
+        condition: service_healthy
+      wiremock:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "bash", "-c", "echo > /dev/tcp/127.0.0.1/8080"]
+      interval: 5s
+      timeout: 3s
+      retries: 24
+      start_period: 60s
+
   localstack:
     image: localstack/localstack:4.14.0
     ports:
       - "4566:4566"
     environment:
       SERVICES: sqs,dynamodb
+      LOCALSTACK_HOST: localstack
+      SQS_ENDPOINT_STRATEGY: path
     volumes:
       - ./infra/localstack/ready.d:/etc/localstack/init/ready.d
     entrypoint: ["/bin/sh", "-c", "chmod +x /etc/localstack/init/ready.d/init-aws.sh && exec docker-entrypoint.sh"]
+    healthcheck:
+      test: ["CMD-SHELL", "awslocal sqs get-queue-url --queue-name claims-standard && awslocal sqs get-queue-url --queue-name claims-death"]
+      interval: 5s
+      timeout: 5s
+      retries: 24
+      start_period: 20s
+
+  # Stands in for Client Registry, Policy Manager and Payment (external systems)
+  wiremock:
+    image: wiremock/wiremock:3.13.2-3
+    volumes:
+      - ./infra/wiremock/mappings:/home/wiremock/mappings:ro
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "bash",
+          "-c",
+          "exec 3<>/dev/tcp/127.0.0.1/8080 && printf 'GET /__admin/health HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n' >&3 && grep -q 200 <&3"
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s

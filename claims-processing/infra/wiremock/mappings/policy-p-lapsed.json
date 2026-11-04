@@ -1,0 +1,17 @@
+{
+  "request": {
+    "method": "GET",
+    "urlPath": "/policies/P-LAPSED/cover"
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "jsonBody": {
+      "policyNumber": "P-LAPSED",
+      "status": "LAPSED",
+      "covered": false
+    }
+  }
+}
