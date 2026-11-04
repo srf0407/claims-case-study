@@ -1,6 +1,8 @@
 package com.claimsprocessing.claims.config;
 
 import java.net.URI;
+import java.time.Clock;
+import java.time.Duration;
 
 import com.claimsprocessing.claims.adapter.out.persistence.ClaimItemMapper;
 import com.claimsprocessing.claims.adapter.out.persistence.DynamoDbClaimRepository;
@@ -57,9 +59,14 @@ public class LocalStackConfig {
 
     @Bean
     ClaimQueuePort sqsClaimQueuePort(
-            SqsClient sqsClient, LocalStackProperties properties, SqsClaimMessageMapper mapper) {
+            SqsClient sqsClient, LocalStackProperties properties, SqsClaimMessageMapper mapper, Clock clock) {
         return new SqsClaimQueue(
-                sqsClient, properties.deathQueueName(), properties.standardQueueName(), mapper);
+                sqsClient,
+                properties.deathQueueName(),
+                properties.standardQueueName(),
+                mapper,
+                clock,
+                Duration.ofSeconds(30));
     }
 
     @Bean

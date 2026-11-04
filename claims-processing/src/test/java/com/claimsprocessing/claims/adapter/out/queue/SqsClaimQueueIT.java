@@ -2,6 +2,8 @@ package com.claimsprocessing.claims.adapter.out.queue;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.time.Clock;
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -53,7 +55,9 @@ class SqsClaimQueueIT {
                 sqsClient,
                 DEATH_QUEUE,
                 STANDARD_QUEUE,
-                new SqsClaimMessageMapper(JsonMapper.builder().build()));
+                new SqsClaimMessageMapper(JsonMapper.builder().build()),
+                Clock.systemUTC(),
+                Duration.ofSeconds(30));
     }
 
     @AfterAll
