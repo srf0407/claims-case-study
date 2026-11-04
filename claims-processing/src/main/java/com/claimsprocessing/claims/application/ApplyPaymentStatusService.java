@@ -29,7 +29,7 @@ public final class ApplyPaymentStatusService implements ApplyPaymentStatusUseCas
         Objects.requireNonNull(command.outcome(), "outcome");
         Objects.requireNonNull(command.idempotencyKey(), "idempotencyKey");
         if (!command.idempotencyKey().equals(command.claimId().value().toString())) {
-            throw new IllegalArgumentException("idempotencyKey");
+            throw new IllegalArgumentException("idempotencyKey mismatch");
         }
         Claim claim = claimRepository.findById(command.claimId())
                 .orElseThrow(() -> new ClaimNotFoundException(command.claimId()));

@@ -218,7 +218,7 @@ class ApplyPaymentStatusServiceTest {
             assertThatThrownBy(() -> applyPaymentStatus.apply(
                             new ApplyPaymentStatusCommand(pending.id(), PaymentOutcome.PAID, key)))
                     .isInstanceOf(IllegalArgumentException.class)
-                    .hasMessage("idempotencyKey");
+                    .hasMessage("idempotencyKey mismatch");
         }
         assertThat(claims.findCount()).isZero();
         assertThat(claims.saveCount()).isZero();

@@ -51,7 +51,7 @@ Draft order; reorder or cut freely.
 - [x] Policy Manager client + WireMock tests
 - [x] Payment client + WireMock tests
 - [x] In-memory claim repository
-- [ ] Error handling and validation responses
+- [x] Error handling and validation responses
 
 
 

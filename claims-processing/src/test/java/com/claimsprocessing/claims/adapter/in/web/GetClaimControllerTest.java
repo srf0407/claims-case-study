@@ -3,6 +3,7 @@ package com.claimsprocessing.claims.adapter.in.web;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.nullValue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -21,6 +22,7 @@ import com.claimsprocessing.claims.domain.Claim;
 import com.claimsprocessing.claims.domain.ClaimId;
 import com.claimsprocessing.claims.domain.ClaimType;
 import org.junit.jupiter.api.Test;
+import org.springframework.http.MediaType;
 import org.springframework.http.converter.json.JacksonJsonHttpMessageConverter;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
@@ -72,7 +74,13 @@ class GetClaimControllerTest {
         ResultActions actions = mockMvc.perform(get("/claims/" + CLAIM_ID));
 
         // then
-        actions.andExpect(status().isNotFound());
+        expectProblem(
+                actions,
+                404,
+                "/problems/claim-not-found",
+                "Claim not found",
+                "Claim not found",
+                "/claims/" + CLAIM_ID);
         assertThat(useCase.calls).isEqualTo(1);
     }
 
@@ -86,8 +94,26 @@ class GetClaimControllerTest {
         ResultActions actions = mockMvc.perform(get("/claims/not-a-uuid"));
 
         // then
-        actions.andExpect(status().isBadRequest());
+        expectProblem(
+                actions,
+                400,
+                "/problems/malformed-request",
+                "Malformed request",
+                "id must be a UUID",
+                "/claims/not-a-uuid");
         assertThat(useCase.calls).isZero();
+    }
+
+    private static void expectProblem(
+            ResultActions actions, int status, String type, String title, String detail, String instance)
+            throws Exception {
+        actions.andExpect(status().is(status))
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.type").value(type))
+                .andExpect(jsonPath("$.title").value(title))
+                .andExpect(jsonPath("$.status").value(status))
+                .andExpect(jsonPath("$.detail").value(detail))
+                .andExpect(jsonPath("$.instance").value(instance));
     }
 
     private static MockMvc mockMvc(GetClaimUseCase useCase) {

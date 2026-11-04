@@ -71,6 +71,17 @@ class PaymentCallbackMapperTest {
     }
 
     @Test
+    void should_reject_a_claim_id_that_is_not_a_uuid() {
+        // given
+        var request = new PaymentCallbackRequest("not-a-uuid", PaymentOutcome.PAID, CLAIM_ID.toString());
+
+        // when / then
+        assertThatThrownBy(() -> mapper.toCommand(request))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("claimId uuid");
+    }
+
+    @Test
     void should_reject_a_null_request_to_the_mapper() {
         // given / when / then
         assertThatThrownBy(() -> mapper.toCommand(null))
