@@ -9,6 +9,9 @@ import com.claimsprocessing.claims.application.port.in.ApplyPaymentStatusCommand
 import com.claimsprocessing.claims.application.port.in.PaymentOutcome;
 import com.claimsprocessing.claims.domain.ClaimId;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.NullAndEmptySource;
+import org.junit.jupiter.params.provider.ValueSource;
 import tools.jackson.databind.json.JsonMapper;
 
 class PaymentCallbackMapperTest {
@@ -28,6 +31,43 @@ class PaymentCallbackMapperTest {
         // then
         assertThat(command).isEqualTo(new ApplyPaymentStatusCommand(
                 new ClaimId(CLAIM_ID), PaymentOutcome.PAID, CLAIM_ID.toString()));
+    }
+
+    @ParameterizedTest
+    @NullAndEmptySource
+    @ValueSource(strings = {" ", "\t"})
+    void should_reject_a_blank_or_missing_claim_id(String claimId) {
+        // given
+        var request = new PaymentCallbackRequest(claimId, PaymentOutcome.PAID, CLAIM_ID.toString());
+
+        // when / then
+        assertThatThrownBy(() -> mapper.toCommand(request))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("claimId");
+    }
+
+    @Test
+    void should_reject_a_missing_outcome() {
+        // given
+        var request = new PaymentCallbackRequest(CLAIM_ID.toString(), null, CLAIM_ID.toString());
+
+        // when / then
+        assertThatThrownBy(() -> mapper.toCommand(request))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("outcome");
+    }
+
+    @ParameterizedTest
+    @NullAndEmptySource
+    @ValueSource(strings = {" ", "\t"})
+    void should_reject_a_blank_or_missing_idempotency_key(String idempotencyKey) {
+        // given
+        var request = new PaymentCallbackRequest(CLAIM_ID.toString(), PaymentOutcome.PAID, idempotencyKey);
+
+        // when / then
+        assertThatThrownBy(() -> mapper.toCommand(request))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("idempotencyKey");
     }
 
     @Test

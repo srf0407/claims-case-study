@@ -24,10 +24,21 @@ public final class PaymentCallbackMapper {
 
     public ApplyPaymentStatusCommand toCommand(PaymentCallbackRequest request) {
         Objects.requireNonNull(request, "request");
+        requireText(request.claimId(), "claimId");
+        if (request.outcome() == null) {
+            throw new IllegalArgumentException("outcome");
+        }
+        requireText(request.idempotencyKey(), "idempotencyKey");
         return new ApplyPaymentStatusCommand(
                 new ClaimId(UUID.fromString(request.claimId())),
                 request.outcome(),
                 request.idempotencyKey());
+    }
+
+    private static void requireText(String value, String name) {
+        if (value == null || value.isBlank()) {
+            throw new IllegalArgumentException(name);
+        }
     }
 
     public PaymentCallbackResponse toResponse(PaymentStatusResult result) {

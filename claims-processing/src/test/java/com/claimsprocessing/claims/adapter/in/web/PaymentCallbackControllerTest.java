@@ -117,6 +117,74 @@ class PaymentCallbackControllerTest {
     }
 
     @Test
+    void should_return_400_when_the_claim_id_is_missing() throws Exception {
+        // given
+        FakeApplyPaymentStatus useCase = new FakeApplyPaymentStatus(PaymentStatusResult.APPLIED);
+        MockMvc mockMvc = callbackMvc(useCase);
+        byte[] body = """
+                {"outcome":"PAID","idempotencyKey":"%s"}
+                """.formatted(CLAIM_ID).trim().getBytes(StandardCharsets.UTF_8);
+
+        // when
+        ResultActions actions = performCallback(mockMvc, body, sign(body));
+
+        // then
+        actions.andExpect(status().isBadRequest());
+        assertThat(useCase.calls).isZero();
+    }
+
+    @Test
+    void should_return_400_when_the_outcome_is_missing() throws Exception {
+        // given
+        FakeApplyPaymentStatus useCase = new FakeApplyPaymentStatus(PaymentStatusResult.APPLIED);
+        MockMvc mockMvc = callbackMvc(useCase);
+        byte[] body = """
+                {"claimId":"%s","idempotencyKey":"%s"}
+                """.formatted(CLAIM_ID, CLAIM_ID).trim().getBytes(StandardCharsets.UTF_8);
+
+        // when
+        ResultActions actions = performCallback(mockMvc, body, sign(body));
+
+        // then
+        actions.andExpect(status().isBadRequest());
+        assertThat(useCase.calls).isZero();
+    }
+
+    @Test
+    void should_return_400_when_the_idempotency_key_is_missing() throws Exception {
+        // given
+        FakeApplyPaymentStatus useCase = new FakeApplyPaymentStatus(PaymentStatusResult.APPLIED);
+        MockMvc mockMvc = callbackMvc(useCase);
+        byte[] body = """
+                {"claimId":"%s","outcome":"PAID"}
+                """.formatted(CLAIM_ID).trim().getBytes(StandardCharsets.UTF_8);
+
+        // when
+        ResultActions actions = performCallback(mockMvc, body, sign(body));
+
+        // then
+        actions.andExpect(status().isBadRequest());
+        assertThat(useCase.calls).isZero();
+    }
+
+    @Test
+    void should_return_400_when_the_outcome_is_unknown() throws Exception {
+        // given
+        FakeApplyPaymentStatus useCase = new FakeApplyPaymentStatus(PaymentStatusResult.APPLIED);
+        MockMvc mockMvc = callbackMvc(useCase);
+        byte[] body = """
+                {"claimId":"%s","outcome":"REFUNDED","idempotencyKey":"%s"}
+                """.formatted(CLAIM_ID, CLAIM_ID).trim().getBytes(StandardCharsets.UTF_8);
+
+        // when
+        ResultActions actions = performCallback(mockMvc, body, sign(body));
+
+        // then
+        actions.andExpect(status().isBadRequest());
+        assertThat(useCase.calls).isZero();
+    }
+
+    @Test
     void should_return_400_when_a_signed_body_is_not_json() throws Exception {
         // given
         FakeApplyPaymentStatus useCase = new FakeApplyPaymentStatus(PaymentStatusResult.APPLIED);
