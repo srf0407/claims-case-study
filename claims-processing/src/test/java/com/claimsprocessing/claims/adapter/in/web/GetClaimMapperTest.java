@@ -44,6 +44,28 @@ class GetClaimMapperTest {
     }
 
     @Test
+    void should_map_death_fields_when_present() {
+        // given
+        var dateOfDeath = LocalDate.of(2026, 2, 20);
+        Claim claim = Claim.accept(
+                ClaimType.DEATH,
+                "C-9",
+                "P-9",
+                new BigDecimal("250.00"),
+                LocalDate.of(2026, 3, 1),
+                dateOfDeath,
+                "CERT-9",
+                Clock.fixed(ACCEPTED_AT, ZoneOffset.UTC));
+
+        // when
+        GetClaimResponse response = mapper.toResponse(claim);
+
+        // then
+        assertThat(response.dateOfDeath()).isEqualTo(dateOfDeath);
+        assertThat(response.deathCertificateRef()).isEqualTo("CERT-9");
+    }
+
+    @Test
     void should_map_an_accepted_event() {
         // given
         Claim claim = acceptedClaim();
