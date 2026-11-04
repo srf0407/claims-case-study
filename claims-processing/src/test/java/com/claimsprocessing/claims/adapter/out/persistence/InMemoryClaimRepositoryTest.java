@@ -14,6 +14,7 @@ import com.claimsprocessing.claims.domain.Claim;
 import com.claimsprocessing.claims.domain.ClaimId;
 import com.claimsprocessing.claims.domain.ClaimStatus;
 import com.claimsprocessing.claims.domain.ClaimType;
+import com.claimsprocessing.claims.domain.RejectionReason;
 import org.junit.jupiter.api.Test;
 
 class InMemoryClaimRepositoryTest {
@@ -83,6 +84,71 @@ class InMemoryClaimRepositoryTest {
 
         // then
         assertThat(found).isEmpty();
+    }
+
+    @Test
+    void should_return_only_accepted_and_awaiting_analyst_death_claims() {
+        // given
+        Claim acceptedDeath = deathClaim();
+        Claim awaitingAnalyst = deathClaim().transitionTo(ClaimStatus.AWAITING_ANALYST, CLOCK);
+        Claim approved = deathClaim()
+                .transitionTo(ClaimStatus.AWAITING_ANALYST, CLOCK)
+                .transitionTo(ClaimStatus.APPROVED, CLOCK);
+        Claim rejected = deathClaim().reject(RejectionReason.UNKNOWN_CLIENT, CLOCK);
+        Claim paymentPending = deathClaim().transitionTo(ClaimStatus.PAYMENT_PENDING, CLOCK);
+        Claim paid = deathClaim()
+                .transitionTo(ClaimStatus.PAYMENT_PENDING, CLOCK)
+                .transitionTo(ClaimStatus.PAID, CLOCK);
+        Claim paymentFailed = deathClaim()
+                .transitionTo(ClaimStatus.PAYMENT_PENDING, CLOCK)
+                .transitionTo(ClaimStatus.PAYMENT_FAILED, CLOCK);
+        Claim funeral = acceptedClaim();
+        Claim disability = Claim.accept(
+                ClaimType.DISABILITY,
+                "C-2",
+                "P-2",
+                new BigDecimal("80.00"),
+                LocalDate.of(2026, 1, 15),
+                null,
+                null,
+                CLOCK).transitionTo(ClaimStatus.AWAITING_ANALYST, CLOCK);
+        repository.save(acceptedDeath);
+        repository.save(awaitingAnalyst);
+        repository.save(approved);
+        repository.save(rejected);
+        repository.save(paymentPending);
+        repository.save(paid);
+        repository.save(paymentFailed);
+        repository.save(funeral);
+        repository.save(disability);
+
+        // when
+        var open = repository.findOpenDeathClaims();
+
+        // then
+        assertThat(open).containsExactlyInAnyOrder(acceptedDeath, awaitingAnalyst);
+        assertThat(open).doesNotContain(paymentPending, paid);
+    }
+
+    @Test
+    void should_return_an_empty_list_when_no_death_claim_is_open() {
+        // given / when
+        var open = repository.findOpenDeathClaims();
+
+        // then
+        assertThat(open).isEmpty();
+    }
+
+    private static Claim deathClaim() {
+        return Claim.accept(
+                ClaimType.DEATH,
+                "C-1",
+                "P-1",
+                new BigDecimal("150.00"),
+                LocalDate.of(2026, 1, 15),
+                LocalDate.of(2026, 1, 10),
+                "DC-1",
+                CLOCK);
     }
 
     private static Claim acceptedClaim() {

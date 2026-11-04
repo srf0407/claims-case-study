@@ -13,6 +13,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.math.BigDecimal;
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
@@ -34,6 +35,9 @@ import org.junit.jupiter.params.provider.ValueSource;
 class ClaimTest {
 
     private static final BigDecimal STRAIGHT_THROUGH_LIMIT = new BigDecimal("10000.00");
+    private static final Instant DEATH_SLA_ACCEPTED_AT = Instant.parse("2026-01-15T10:00:00Z");
+    private static final Duration DEATH_SLA = Duration.ofHours(4);
+    private static final double DEATH_SLA_WARNING_FRACTION = 0.75;
     private static final Set<List<ClaimStatus>> LEGAL_PAIRS = Set.of(
             List.of(ACCEPTED, AWAITING_ANALYST),
             List.of(ACCEPTED, PAYMENT_PENDING),
@@ -498,6 +502,131 @@ class ClaimTest {
         assertThat(claim.events()).isEqualTo(eventsBefore);
     }
 
+    @Test
+    void should_return_on_time_just_before_the_warning() {
+        // given
+        Claim claim = openDeathClaim();
+
+        // when
+        DeathSlaLevel level = claim.openDeathSlaLevel(
+                Instant.parse("2026-01-15T12:59:59Z"), DEATH_SLA, DEATH_SLA_WARNING_FRACTION);
+
+        // then
+        assertThat(level).isEqualTo(DeathSlaLevel.ON_TIME);
+    }
+
+    @Test
+    void should_return_warning_exactly_at_the_warning() {
+        // given
+        Claim claim = openDeathClaim();
+
+        // when
+        DeathSlaLevel level = claim.openDeathSlaLevel(
+                Instant.parse("2026-01-15T13:00:00Z"), DEATH_SLA, DEATH_SLA_WARNING_FRACTION);
+
+        // then
+        assertThat(level).isEqualTo(DeathSlaLevel.WARNING);
+    }
+
+    @Test
+    void should_return_warning_between_the_warning_and_the_breach() {
+        // given
+        Claim claim = openDeathClaim();
+
+        // when
+        DeathSlaLevel level = claim.openDeathSlaLevel(
+                Instant.parse("2026-01-15T13:30:00Z"), DEATH_SLA, DEATH_SLA_WARNING_FRACTION);
+
+        // then
+        assertThat(level).isEqualTo(DeathSlaLevel.WARNING);
+    }
+
+    @Test
+    void should_return_breach_exactly_at_the_breach() {
+        // given
+        Claim claim = openDeathClaim();
+
+        // when
+        DeathSlaLevel level = claim.openDeathSlaLevel(
+                Instant.parse("2026-01-15T14:00:00Z"), DEATH_SLA, DEATH_SLA_WARNING_FRACTION);
+
+        // then
+        assertThat(level).isEqualTo(DeathSlaLevel.BREACH);
+    }
+
+    @Test
+    void should_return_breach_past_the_breach() {
+        // given
+        Claim claim = openDeathClaim();
+
+        // when
+        DeathSlaLevel level = claim.openDeathSlaLevel(
+                Instant.parse("2026-01-15T14:00:01Z"), DEATH_SLA, DEATH_SLA_WARNING_FRACTION);
+
+        // then
+        assertThat(level).isEqualTo(DeathSlaLevel.BREACH);
+    }
+
+    @Test
+    void should_return_warning_for_an_awaiting_analyst_death_claim() {
+        // given
+        Claim claim = openDeathClaim().transitionTo(AWAITING_ANALYST, clockAt(DEATH_SLA_ACCEPTED_AT));
+
+        // when
+        DeathSlaLevel level = claim.openDeathSlaLevel(
+                Instant.parse("2026-01-15T13:00:00Z"), DEATH_SLA, DEATH_SLA_WARNING_FRACTION);
+
+        // then
+        assertThat(level).isEqualTo(DeathSlaLevel.WARNING);
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = ClaimType.class, names = {"DISABILITY", "FUNERAL"})
+    void should_reject_a_non_death_claim(ClaimType claimType) {
+        // given
+        Claim claim = aClaim().claimType(claimType).build();
+
+        // when / then
+        assertThatThrownBy(() -> claim.openDeathSlaLevel(
+                        Instant.parse("2026-01-15T13:00:00Z"), DEATH_SLA, DEATH_SLA_WARNING_FRACTION))
+                .isInstanceOf(InvalidClaimException.class);
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = ClaimStatus.class, names = {"ACCEPTED", "AWAITING_ANALYST"}, mode = Mode.EXCLUDE)
+    void should_reject_a_closed_death_claim(ClaimStatus status) {
+        // given
+        Claim claim = closedDeathClaim(status);
+
+        // when / then
+        assertThatThrownBy(() -> claim.openDeathSlaLevel(
+                        Instant.parse("2026-01-15T13:00:00Z"), DEATH_SLA, DEATH_SLA_WARNING_FRACTION))
+                .isInstanceOf(InvalidClaimException.class);
+    }
+
+    @Test
+    void should_reject_a_null_now() {
+        // given
+        Claim claim = openDeathClaim();
+
+        // when / then
+        assertThatThrownBy(() -> claim.openDeathSlaLevel(null, DEATH_SLA, DEATH_SLA_WARNING_FRACTION))
+                .isInstanceOf(NullPointerException.class)
+                .hasMessage("now");
+    }
+
+    @Test
+    void should_reject_a_null_duration() {
+        // given
+        Claim claim = openDeathClaim();
+
+        // when / then
+        assertThatThrownBy(() -> claim.openDeathSlaLevel(
+                        Instant.parse("2026-01-15T13:00:00Z"), null, DEATH_SLA_WARNING_FRACTION))
+                .isInstanceOf(NullPointerException.class)
+                .hasMessage("duration");
+    }
+
     private static Stream<Arguments> legalPairs() {
         return LEGAL_PAIRS.stream().map(pair -> Arguments.of(pair.get(0), pair.get(1)));
     }
@@ -541,6 +670,24 @@ class ClaimTest {
                 aClaim().claimType(null),
                 aClaim().amount(null),
                 aClaim().incidentDate(null));
+    }
+
+    private static Claim openDeathClaim() {
+        return aClaim().death().clock(clockAt(DEATH_SLA_ACCEPTED_AT)).build();
+    }
+
+    private static Claim closedDeathClaim(ClaimStatus status) {
+        Claim accepted = openDeathClaim();
+        Clock clock = clockAt(DEATH_SLA_ACCEPTED_AT);
+        return switch (status) {
+            case ACCEPTED, AWAITING_ANALYST -> throw new IllegalStateException(status.name());
+            case REJECTED -> accepted.reject(RejectionReason.UNKNOWN_CLIENT, clock);
+            case APPROVED -> accepted.transitionTo(AWAITING_ANALYST, clock).transitionTo(APPROVED, clock);
+            case PAYMENT_PENDING -> accepted.transitionTo(PAYMENT_PENDING, clock);
+            case PAID -> accepted.transitionTo(PAYMENT_PENDING, clock).transitionTo(PAID, clock);
+            case PAYMENT_FAILED ->
+                    accepted.transitionTo(PAYMENT_PENDING, clock).transitionTo(PAYMENT_FAILED, clock);
+        };
     }
 
     private static Claim claimIn(ClaimStatus status, Clock clock) {

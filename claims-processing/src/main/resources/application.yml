@@ -12,3 +12,7 @@ claims:
     connect-timeout: 2s
     read-timeout: 5s
     callback-secret: dev-callback-secret
+  death-sla:
+    duration: PT4H
+    warning-fraction: 0.75
+    check-interval: PT1M

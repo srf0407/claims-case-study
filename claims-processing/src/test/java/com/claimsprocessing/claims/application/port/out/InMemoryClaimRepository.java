@@ -7,6 +7,8 @@ import java.util.Optional;
 
 import com.claimsprocessing.claims.domain.Claim;
 import com.claimsprocessing.claims.domain.ClaimId;
+import com.claimsprocessing.claims.domain.ClaimStatus;
+import com.claimsprocessing.claims.domain.ClaimType;
 
 public final class InMemoryClaimRepository implements ClaimRepositoryPort {
 
@@ -21,6 +23,15 @@ public final class InMemoryClaimRepository implements ClaimRepositoryPort {
     @Override
     public Optional<Claim> findById(ClaimId id) {
         return Optional.ofNullable(claims.get(id));
+    }
+
+    @Override
+    public List<Claim> findOpenDeathClaims() {
+        return claims.values().stream()
+                .filter(claim -> claim.claimType() == ClaimType.DEATH)
+                .filter(claim -> claim.status() == ClaimStatus.ACCEPTED
+                        || claim.status() == ClaimStatus.AWAITING_ANALYST)
+                .toList();
     }
 
     public boolean isEmpty() {

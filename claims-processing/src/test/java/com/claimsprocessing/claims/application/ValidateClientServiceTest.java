@@ -9,6 +9,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -183,6 +184,15 @@ class ValidateClientServiceTest {
         @Override
         public Optional<Claim> findById(ClaimId id) {
             return Optional.ofNullable(claims.get(id));
+        }
+
+        @Override
+        public List<Claim> findOpenDeathClaims() {
+            return claims.values().stream()
+                    .filter(claim -> claim.claimType() == ClaimType.DEATH)
+                    .filter(claim -> claim.status() == ClaimStatus.ACCEPTED
+                            || claim.status() == ClaimStatus.AWAITING_ANALYST)
+                    .toList();
         }
     }
 
