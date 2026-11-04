@@ -8,6 +8,7 @@ import com.claimsprocessing.claims.adapter.out.queue.SqsClaimMessageMapper;
 import com.claimsprocessing.claims.adapter.out.queue.SqsClaimQueue;
 import com.claimsprocessing.claims.application.port.out.ClaimQueuePort;
 import com.claimsprocessing.claims.application.port.out.ClaimRepositoryPort;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Profile;
@@ -21,6 +22,7 @@ import tools.jackson.databind.ObjectMapper;
 
 @Configuration
 @Profile("localstack")
+@EnableConfigurationProperties(LocalStackProperties.class)
 public class LocalStackConfig {
 
     @Bean
